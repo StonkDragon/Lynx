@@ -1,0 +1,5 @@
+function main(): none
+    "Hello, World!" puts
+end
+
+

@@ -1,0 +1,26 @@
+use: [
+    "clang" -- tries to find clang.lyntax
+]
+
+clang: {
+    output: "main"
+    warnings: [
+        "Wall"
+        "Wextra"
+        "Wpedantic"
+        "Werror"
+    ]
+    pedantic: 1
+    std: "c99"
+    optimize: 3
+    debug: 0
+    include: [
+        "include"
+    ]
+    define: [
+        "DEBUG"
+    ]
+    link: [
+        "m"
+    ]
+}

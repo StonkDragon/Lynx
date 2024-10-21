@@ -1,0 +1,20 @@
+-- optional: make this field optional
+-- inherit: all subfields inherit properties from this field
+-- compound: this field is a compound type
+-- array: this field is an array
+-- string: this field is a string
+
+clang = optional inherit compound {
+    output = string
+    warnings = array[string]
+    pedantic = number
+    std = string
+    optimize = number
+    debug = number
+    include = array[string]
+    define = array[string]
+    link = array[string]
+    flags = array[string]
+    lib = array[string]
+    libpath = array[string]
+}
