@@ -18,3 +18,26 @@ clang = optional inherit compound {
     lib = array[string]
     libpath = array[string]
 }
+
+use: [
+    "functional"
+]
+
+build: {
+    "clang -o "
+    clang.output
+    " -std="
+    clang.std
+    " -O"
+    clang.optimize
+    " -g"
+    clang.debug
+    functional.if  (clang.pedantic    " -pedantic")
+    functional.for (clang.include     include     " -I" include)
+    functional.for (clang.define      define      " -D" define)
+    functional.for (clang.flags       flag        " " flag)
+    functional.for (clang.lib         lib         " -l" lib)
+    functional.for (clang.libpath     libpath     " -L" libpath)
+    functional.for (clang.link        link        " " link)
+    functional.for (clang.warnings    warning     " -W" warning)
+}

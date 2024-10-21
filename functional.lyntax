@@ -1,0 +1,4 @@
+functional = module {
+    if = function(number, string) -> string
+    for = function(array[string], string, string) -> string
+}
