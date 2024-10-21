@@ -23,7 +23,7 @@ use: [
     "functional"
 ]
 
-build: {
+build: [
     "clang -o "
     clang.output
     " -std="
@@ -40,4 +40,4 @@ build: {
     functional.for (clang.libpath     libpath     " -L" libpath)
     functional.for (clang.link        link        " " link)
     functional.for (clang.warnings    warning     " -W" warning)
-}
+]
