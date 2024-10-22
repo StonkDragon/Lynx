@@ -14,7 +14,7 @@ validation: validate clang (optional) compound {
     files = list[string]
 }
 
-output: runshell (
+command: (
     "clang"
     if exists clang.output   (" -o " clang.output)
     if exists clang.std      (" -std=" clang.std)
@@ -31,4 +31,4 @@ output: runshell (
     if exists clang.files    (for f in clang.files (" " f))
 )
 
-_: print output
+output: runshell command

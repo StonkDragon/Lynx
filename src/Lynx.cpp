@@ -329,6 +329,7 @@ std::unordered_map<std::string, Command> commands{
         }
         if (entry->getType() != EntryType::Number) {
             LYNX_ERR << "Invalid entry type. Expected Number but got " << entry->getType() << std::endl;
+            entry->print(std::cerr);
             return nullptr;
         }
 
@@ -389,63 +390,13 @@ std::unordered_map<std::string, Command> commands{
         return result;
     }),
     std::pair("exists", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+        i++;
         std::string path = makePath(tokens, i);
         ConfigEntry* entry = byPath(path, parser);
-        i++;
         
-        std::vector<Token> ifBlock;
-        int newI = 0;
-        ifBlock.push_back(tokens[i]);
-        if (i < tokens.size() && tokens[i].type == Token::BlockStart) {
-            i++;
-            int blockDepth = 1;
-            while (i < tokens.size() && blockDepth > 0) {
-                if (tokens[i].type == Token::BlockStart) {
-                    blockDepth++;
-                } else if (tokens[i].type == Token::BlockEnd) {
-                    blockDepth--;
-                }
-                ifBlock.push_back(tokens[i]);
-                i++;
-            }
-            i--;
-        }
-        
-        std::vector<Token> elseBlock;
-        if (i + 1 < tokens.size() && tokens[i + 1].type == Token::Identifier && tokens[i + 1].value == "else") {
-            i++;
-            i++;
-            elseBlock.push_back(tokens[i]);
-            if (i < tokens.size() && tokens[i].type == Token::BlockStart) {
-                i++;
-                int blockDepth = 1;
-                while (i < tokens.size() && blockDepth > 0) {
-                    if (tokens[i].type == Token::BlockStart) {
-                        blockDepth++;
-                    } else if (tokens[i].type == Token::BlockEnd) {
-                        blockDepth--;
-                    }
-                    elseBlock.push_back(tokens[i]);
-                    i++;
-                }
-                i--;
-            }
-        } else {
-            Token t;
-            t.type = Token::String;
-            t.value = "";
-            elseBlock.push_back(t);
-        }
-
         bool condition = entry != nullptr;
-        std::vector<Token>& ifBlockToUse = condition ? ifBlock : elseBlock;
-
-        ConfigEntry* result = parser->parseValue(ifBlockToUse, newI);
-        if (!result) {
-            LYNX_ERR << "Failed to parse if block" << std::endl;
-            return nullptr;
-        }
-
+        NumberEntry* result = new NumberEntry();
+        result->setValue(condition ? 1 : 0);
         return result;
     }),
     std::pair("validate", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
