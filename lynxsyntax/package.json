@@ -1,0 +1,26 @@
+{
+  "name": "lynxsyntax",
+  "displayName": "LynxSyntax",
+  "description": "",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.94.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "lynx",
+      "aliases": ["Lynx", "lynx"],
+      "extensions": [".lynx"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "lynx",
+      "scopeName": "source.lynx",
+      "path": "./syntaxes/lynx.tmLanguage.json"
+    }]
+  },
+  "repository": {}
+}

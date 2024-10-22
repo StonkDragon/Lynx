@@ -1,0 +1,34 @@
+validation: validate clang (optional) compound {
+    output = string
+    warnings = list[string]
+    pedantic = number
+    std = string
+    optimize = string
+    debug = number
+    include = list[string]
+    define = list[string]
+    link = list[string]
+    flags = list[string]
+    lib = list[string]
+    libpath = list[string]
+    files = list[string]
+}
+
+output: runshell (
+    "clang"
+    if exists clang.output   (" -o " clang.output)
+    if exists clang.std      (" -std=" clang.std)
+    if exists clang.optimize (" -O" clang.optimize)
+    if exists clang.debug    (if clang.debug (" -g"))
+    if exists clang.pedantic (if clang.pedantic (" -pedantic"))
+    if exists clang.include  (for i in clang.include (" -I" i))
+    if exists clang.define   (for d in clang.define (" -D" d))
+    if exists clang.flags    (for f in clang.flags (" " f))
+    if exists clang.lib      (for l in clang.lib (" -l" l))
+    if exists clang.libpath  (for p in clang.libpath (" -L" p))
+    if exists clang.link     (for l in clang.link (" " l))
+    if exists clang.warnings (for w in clang.warnings (" -W" w))
+    if exists clang.files    (for f in clang.files (" " f))
+)
+
+_: print output

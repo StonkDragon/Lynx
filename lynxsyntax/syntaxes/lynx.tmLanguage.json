@@ -1,0 +1,58 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "lynx",
+	"patterns": [
+		{"include": "#comment"},
+		{"include": "#quoted_string"},
+		{"include": "#keyword"},
+		{"include": "#constant_number"},
+		{"include": "#default"}
+	],
+	"repository": {
+		"comment": {
+			"name": "comment",
+			"begin": "--",
+			"end": "\n",
+			"patterns": [{
+				"name": "comment",
+				"match": "."
+			}]
+		},
+		"keyword": {
+			"patterns": [{
+				"name": "keyword.control",
+				"match": "\\b(if|for|in|else)\\b"
+			},{
+				"name": "keyword.control",
+				"match": "\\b(true|false|runshell|print|use|printLn|readLn|for|equals|string-length|string-substring|if|exists|validate|mod|range|optional|add|sub|mul|div|gt|lt|ge|le|or|and|not)\\b"
+			},{
+				"name": "keyword.control",
+				"match": "\\b(compound|list|string|number)\\b"
+			},{
+				"name": "keyword.control",
+				"match": "\\b(true|false)\\b"
+			},{
+				"name": "keyword.control",
+				"match": "(:|=)"
+			}]
+		},
+		"quoted_string": {
+			"name": "string.quoted.double",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [{
+				"name": "string",
+				"match": "\\\\."
+			}]
+		},
+		"constant_number": {
+			"name": "constant.numeric",
+			"match": "\\b[0-9]+(\\.[0-9]+)?\\b"
+		},
+		"default": {
+			"name": "variable.name",
+			"match": "[A-Za-z_-]+([A-Za-z_0-9-]+)?"
+		}
+	},
+	"scopeName": "source.lynx"
+}
