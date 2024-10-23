@@ -471,18 +471,16 @@ std::unordered_map<std::string, Command> commands{
                 flags.push_back(tokens[i].value);
                 i++;
             }
+            i++;
         }
-        i++;
         Type* type = parser->parseType(tokens, i);
         if (!type) {
             LYNX_ERR << "Failed to parse type" << std::endl;
             return nullptr;
         }
-        if (!parser->checkTypes(entry, type, flags)) {
-            LYNX_ERR << "Failed to validate entry" << std::endl;
-            return nullptr;
-        }
-        return new StringEntry();
+        NumberEntry* result = new NumberEntry();
+        result->setValue(parser->checkTypes(entry, type, flags) == true);
+        return result;
     }),
 
 #define BINARY_OP(_name, _op) \
@@ -798,6 +796,20 @@ std::unordered_map<std::string, Command> commands{
         NumberEntry* result = new NumberEntry();
         result->setValue(((NumberEntry*) entry)->getValue() - 1);
         return result;
+    }),
+    std::pair("exit", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse exit block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::Number) {
+            LYNX_ERR << "Invalid entry type in exit block. Expected Number but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        NumberEntry* number = (NumberEntry*) entry;
+        std::exit(number->getValue());
     }),
 };
 

@@ -1,6 +1,15 @@
-name: (
-    print "Enter your name: "
-    readLn
+Person = compound {
+    firstName = string
+    lastName = string
+}
+
+Person-greet: func(person = Person) (
+    printLn ("Hello, " person.firstName " " person.lastName "!")
 )
-_: printLn ("Hello, " name)
-_: print .
+
+john: {
+    firstName: "John"
+    lastName: "Doe"
+}
+
+_: Person-greet john

@@ -14,6 +14,11 @@ validation: validate clang (optional) compound {
     files = list[string]
 }
 
+_: if not validation (
+    printLn "Invalid commands"
+    exit 0
+)
+
 command: (
     "clang"
     if exists clang.output   (" -o " clang.output)

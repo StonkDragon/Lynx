@@ -856,6 +856,32 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i) {
 }
 
 Type* ConfigParser::parseType(std::vector<Token>& tokens, int& i) {
+    auto byPath = [&i, this](std::string value) -> ConfigEntry* {
+        ConfigEntry* entry = nullptr;
+        for (size_t i = compoundStack.size(); i > 0 && !entry; i--) {
+            entry = compoundStack[i - 1]->getByPath(value);
+        }
+        if (!entry) {
+            return nullptr;
+        }
+        return entry->clone();
+    };
+    auto makePath = [](std::vector<Token>& tokens, int& i) -> std::string {
+        std::string path = tokens[i].value;
+        i++;
+        while (i < tokens.size() && tokens[i].type == Token::Dot) {
+            path += ".";
+            i++;
+            if (i >= tokens.size() || tokens[i].type != Token::Identifier) {
+                LYNX_ERR << "Invalid path" << std::endl;
+                return nullptr;
+            }
+            path += tokens[i].value;
+            i++;
+        }
+        i--;
+        return path;
+    };
     Type* t = new Type();
     if (i >= tokens.size() || tokens[i].type != Token::Identifier) {
         LYNX_ERR << "Invalid type: " << tokens[i].value << std::endl;
@@ -887,9 +913,43 @@ Type* ConfigParser::parseType(std::vector<Token>& tokens, int& i) {
         }
         t->type = EntryType::Compound;
         t->compoundTypes = parseCompoundTypes(tokens, i);
+    } else if (tokens[i].value == "func") {
+        i++;
+        if (i >= tokens.size() || tokens[i].type != Token::BlockStart) {
+            LYNX_ERR << "Expected arguments but got " << tokens[i].value << std::endl;
+            return nullptr;
+        }
+        t->type = EntryType::Function;
+        i++;
+        t->compoundTypes = new std::vector<Type::CompoundType>();
+        if (i < tokens.size() && tokens[i].type != Token::BlockEnd) {
+            int blockDepth = 1;
+            while (i < tokens.size() && blockDepth > 0) {
+                if (tokens[i].type == Token::BlockStart) {
+                    blockDepth++;
+                } else if (tokens[i].type == Token::BlockEnd) {
+                    blockDepth--;
+                }
+                std::string key = tokens[i].value;
+                i++;
+                if (i >= tokens.size() || tokens[i].type != Token::Is) {
+                    LYNX_ERR << "Expected type assignment but got " << tokens[i].value << std::endl;
+                    return nullptr;
+                }
+                i++;
+                Type* t = parseType(tokens, i);
+                t->compoundTypes->push_back({key, t});
+            }
+            i--;
+        }
     } else {
-        LYNX_ERR << "Invalid type: " << tokens[i].value << std::endl;
-        return nullptr;
+        std::string path = makePath(tokens, i);
+        ConfigEntry* typeEntry = byPath(path);
+        if (!typeEntry) {
+            LYNX_ERR << "Invalid type: " << tokens[i].value << std::endl;
+            return nullptr;
+        }
+        // TODO: TypeEntry
     }
     return t;
 }
@@ -986,6 +1046,21 @@ CompoundEntry* ConfigParser::parseCompound(std::vector<Token>& tokens, int& i) {
         }
         std::string key = tokens[i].value;
         i++;
+        if (i < tokens.size() || tokens[i].type == Token::Is) {
+            i++;
+            Type* type = parseType(tokens, i);
+            if (!type) {
+                LYNX_ERR << "Failed to parse type for key '" << key << "'" << std::endl;
+                compoundStack.pop_back();
+                return nullptr;
+            }
+
+            ConfigEntry* entry = typeToEntry(type);
+            entry->setKey(key);
+            compound->add(entry);
+            i++;
+            continue;
+        }
         if (i >= tokens.size() || tokens[i].type != Token::Assign) {
             LYNX_ERR << "Invalid assignment: " << tokens[i].value << " in key '" << key << "'" << std::endl;
             compoundStack.pop_back();
