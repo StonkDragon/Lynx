@@ -20,6 +20,10 @@
       "language": "lynx",
       "scopeName": "source.lynx",
       "path": "./syntaxes/lynx.tmLanguage.json"
+    }],
+    "snippets": [{
+      "language": "lynx",
+      "path": "./snippets/snippets.code-snippets"
     }]
   },
   "repository": {}

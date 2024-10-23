@@ -1,0 +1,6 @@
+name: (
+    print "Enter your name: "
+    readLn
+)
+_: printLn ("Hello, " name)
+_: print .

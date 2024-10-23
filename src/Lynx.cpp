@@ -59,6 +59,56 @@ bool add(ConfigEntry* finalEntry, ConfigEntry* entry) {
 }
 
 std::unordered_map<std::string, Command> commands{
+    std::pair("func", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+        FunctionEntry* entry = new FunctionEntry();
+        i++;
+        if (i >= tokens.size() || tokens[i].type != Token::BlockStart) {
+            LYNX_ERR << "Expected block start but got " << tokens[i].value << std::endl;
+            return nullptr;
+        }
+        i++;
+        while (i < tokens.size() && tokens[i].type != Token::BlockEnd) {
+            if (tokens[i].type != Token::Identifier) {
+                LYNX_ERR << "Expected Identifier but got " << tokens[i].value << std::endl;
+                return nullptr;
+            }
+            std::string name = tokens[i].value;
+            i++;
+            if (i >= tokens.size() || tokens[i].type != Token::Is) {
+                LYNX_ERR << "Expected '=' but got " << tokens[i].value << std::endl;
+                return nullptr;
+            }
+            i++;
+            Type* type = parser->parseType(tokens, i);
+            if (!type) {
+                LYNX_ERR << "Failed to parse type for argument '" << name << "'" << std::endl;
+                return nullptr;
+            }
+            entry->args.push_back({name, type});
+            i++;
+        }
+        i++;
+        if (i >= tokens.size() || tokens[i].type != Token::BlockStart) {
+            LYNX_ERR << "Expected block start but got " << tokens[i].value << std::endl;
+            return nullptr;
+        }
+        std::vector<Token> body;
+        body.push_back(tokens[i]);
+        i++;
+        int blockDepth = 1;
+        while (i < tokens.size() && blockDepth > 0) {
+            if (tokens[i].type == Token::BlockStart) {
+                blockDepth++;
+            } else if (tokens[i].type == Token::BlockEnd) {
+                blockDepth--;
+            }
+            body.push_back(tokens[i]);
+            i++;
+        }
+        i--;
+        entry->body = body;
+        return entry;
+    }),
     std::pair("true", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
         NumberEntry* entry = new NumberEntry();
         entry->setValue(1);
@@ -112,6 +162,8 @@ std::unordered_map<std::string, Command> commands{
                     std::cerr << "Number is too large to print" << std::endl;
                 }
                 break;
+            case EntryType::List: result->print(std::cout); break;
+            case EntryType::Compound: result->print(std::cout); break;
             default:
                 LYNX_ERR << "Invalid entry type in print block. Expected String or Number but got " << result->getType() << std::endl;
                 return nullptr;
@@ -576,6 +628,175 @@ std::unordered_map<std::string, Command> commands{
             entry->setValue(i);
             result->add(entry);
         }
+        return result;
+    }),
+    std::pair("len", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+        i++;
+        ConfigEntry* list = parser->parseValue(tokens, i);
+        if (!list) {
+            LYNX_ERR << "Failed to parse range block" << std::endl;
+            return nullptr;
+        }
+        if (list->getType() != EntryType::List) {
+            LYNX_ERR << "Invalid entry type in len block. Expected List but got " << list->getType() << std::endl;
+            return nullptr;
+        }
+        NumberEntry* result = new NumberEntry();
+        result->setValue(((ListEntry*) list)->size());
+        return result;
+    }),
+    std::pair("get", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+        i++;
+        ConfigEntry* list = parser->parseValue(tokens, i);
+        if (!list) {
+            LYNX_ERR << "Failed to parse list" << std::endl;
+            return nullptr;
+        }
+        if (list->getType() != EntryType::List) {
+            LYNX_ERR << "Invalid entry type in get. Expected List but got " << list->getType() << std::endl;
+            return nullptr;
+        }
+        i++;
+        ConfigEntry* index = parser->parseValue(tokens, i);
+        if (!index) {
+            LYNX_ERR << "Failed to parse index" << std::endl;
+            return nullptr;
+        }
+        if (index->getType() != EntryType::Number) {
+            LYNX_ERR << "Invalid entry type in get. Expected Number but got " << index->getType() << std::endl;
+            return nullptr;
+        }
+        ListEntry* listEntry = (ListEntry*) list;
+        long long idx = ((NumberEntry*) index)->getValue();
+        if (idx < 0 || idx >= listEntry->size()) {
+            LYNX_ERR << "Index out of bounds" << std::endl;
+            return nullptr;
+        }
+        return listEntry->get(idx)->clone();
+    }),
+    std::pair("set", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+        i++;
+        ConfigEntry* list = parser->parseValue(tokens, i);
+        if (!list) {
+            LYNX_ERR << "Failed to parse range block" << std::endl;
+            return nullptr;
+        }
+        if (list->getType() != EntryType::List) {
+            LYNX_ERR << "Invalid entry type in len block. Expected List but got " << list->getType() << std::endl;
+            return nullptr;
+        }
+        i++;
+        ConfigEntry* index = parser->parseValue(tokens, i);
+        if (!index) {
+            LYNX_ERR << "Failed to parse index" << std::endl;
+            return nullptr;
+        }
+        if (index->getType() != EntryType::Number) {
+            LYNX_ERR << "Invalid entry type in get. Expected Number but got " << index->getType() << std::endl;
+            return nullptr;
+        }
+        i++;
+        ConfigEntry* value = parser->parseValue(tokens, i);
+        if (!value) {
+            LYNX_ERR << "Failed to parse value" << std::endl;
+            return nullptr;
+        }
+        ListEntry* listEntry = (ListEntry*) list;
+        if (value->getType() != listEntry->getListType()) {
+            LYNX_ERR << "Invalid entry type in set. Expected " << listEntry->getListType() << " but got " << value->getType() << std::endl;
+            return nullptr;
+        }
+        long long idx = ((NumberEntry*) index)->getValue();
+        if (idx < 0 || idx >= listEntry->size()) {
+            LYNX_ERR << "Index out of bounds" << std::endl;
+            return nullptr;
+        }
+        listEntry->get(idx) = value->clone();
+        return new StringEntry();
+    }),
+    std::pair("append", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+        i++;
+        ConfigEntry* list = parser->parseValue(tokens, i);
+        if (!list) {
+            LYNX_ERR << "Failed to parse range block" << std::endl;
+            return nullptr;
+        }
+        if (list->getType() != EntryType::List) {
+            LYNX_ERR << "Invalid entry type in len block. Expected List but got " << list->getType() << std::endl;
+            return nullptr;
+        }
+        i++;
+        ConfigEntry* value = parser->parseValue(tokens, i);
+        if (!value) {
+            LYNX_ERR << "Failed to parse value" << std::endl;
+            return nullptr;
+        }
+        ListEntry* listEntry = (ListEntry*) list;
+        if (value->getType() != listEntry->getListType()) {
+            LYNX_ERR << "Invalid entry type in append. Expected " << listEntry->getListType() << " but got " << value->getType() << std::endl;
+            return nullptr;
+        }
+        listEntry->add(value->clone());
+        return new StringEntry();
+    }),
+    std::pair("remove", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+        i++;
+        ConfigEntry* list = parser->parseValue(tokens, i);
+        if (!list) {
+            LYNX_ERR << "Failed to parse range block" << std::endl;
+            return nullptr;
+        }
+        if (list->getType() != EntryType::List) {
+            LYNX_ERR << "Invalid entry type in len block. Expected List but got " << list->getType() << std::endl;
+            return nullptr;
+        }
+        i++;
+        ConfigEntry* index = parser->parseValue(tokens, i);
+        if (!index) {
+            LYNX_ERR << "Failed to parse index" << std::endl;
+            return nullptr;
+        }
+        if (index->getType() != EntryType::Number) {
+            LYNX_ERR << "Invalid entry type in get. Expected Number but got " << index->getType() << std::endl;
+            return nullptr;
+        }
+        ListEntry* listEntry = (ListEntry*) list;
+        long long idx = ((NumberEntry*) index)->getValue();
+        if (idx < 0 || idx >= listEntry->size()) {
+            LYNX_ERR << "Index out of bounds" << std::endl;
+            return nullptr;
+        }
+        listEntry->remove(idx);
+        return new StringEntry();
+    }),
+    std::pair("inc", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse inc block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::Number) {
+            LYNX_ERR << "Invalid entry type in inc block. Expected Number but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        NumberEntry* result = new NumberEntry();
+        result->setValue(((NumberEntry*) entry)->getValue() + 1);
+        return result;
+    }),
+    std::pair("dec", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse dec block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::Number) {
+            LYNX_ERR << "Invalid entry type in dec block. Expected Number but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        NumberEntry* result = new NumberEntry();
+        result->setValue(((NumberEntry*) entry)->getValue() - 1);
         return result;
     }),
 };

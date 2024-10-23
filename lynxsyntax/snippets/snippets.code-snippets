@@ -1,0 +1,274 @@
+{
+	"Compound": {
+		"scope": "source.lynx",
+		"prefix": "Compound",
+		"body": [
+			"{",
+            "\t$0",
+            "}"
+		],
+		"description": "Compound"
+	},
+    "List": {
+        "scope": "source.lynx",
+        "prefix": "List",
+        "body": [
+            "[",
+            "\t$0",
+            "]"
+        ],
+        "description": "List"
+    },
+    "String": {
+        "scope": "source.lynx",
+        "prefix": "String",
+        "body": "\"$0\"",
+        "description": "String"
+    },
+    "Number": {
+        "scope": "source.lynx",
+        "prefix": "Number",
+        "body": "${0:0}",
+        "description": "Number"
+    },
+    "true": {
+        "scope": "source.lynx",
+        "prefix": "true",
+        "body": "true",
+        "description": "true"
+    },
+    "false": {
+        "scope": "source.lynx",
+        "prefix": "false",
+        "body": "false",
+        "description": "false"
+    },
+    "runshell": {
+        "scope": "source.lynx",
+        "prefix": "runshell",
+        "body": [
+            "runshell ${0:expr}"
+        ],
+        "description": "runshell"
+    },
+    "Block": {
+        "scope": "source.lynx",
+        "prefix": "Block",
+        "body": [
+            "(",
+            "\t$0",
+            ")"
+        ],
+        "description": "Block"
+    },
+    "print": {
+        "scope": "source.lynx",
+        "prefix": "print",
+        "body": "print ${0:expr}",
+        "description": "print"
+    },
+    "printLn": {
+        "scope": "source.lynx",
+        "prefix": "printLn",
+        "body": "printLn ${0:expr}",
+        "description": "printLn"
+    },
+    "readLn": {
+        "scope": "source.lynx",
+        "prefix": "readLn",
+        "body": "readLn",
+        "description": "readLn"
+    },
+    "for": {
+        "scope": "source.lynx",
+        "prefix": "for",
+        "body": [
+            "for ${1:var} in ${2:iterable} (",
+            "\t$0",
+            ")"
+        ],
+        "description": "for"
+    },
+    "use": {
+        "scope": "source.lynx",
+        "prefix": "use",
+        "body": "use \"${0:file}\"",
+        "description": "use"
+    },
+    "if": {
+        "scope": "source.lynx",
+        "prefix": "if",
+        "body": [
+            "if ${1:expr} (",
+            "\t$0",
+            ")"
+        ],
+        "description": "if"
+    },
+    "else": {
+        "scope": "source.lynx",
+        "prefix": "else",
+        "body": [
+            "else (",
+            "\t$0",
+            ")"
+        ],
+        "description": "else"
+    },
+    "equals": {
+        "scope": "source.lynx",
+        "prefix": "equals",
+        "body": "equals ${1:expr} ${2:expr}",
+        "description": "equals"
+    },
+    "string-length": {
+        "scope": "source.lynx",
+        "prefix": "string-length",
+        "body": "string-length ${1:expr}",
+        "description": "string-length"
+    },
+    "string-substring": {
+        "scope": "source.lynx",
+        "prefix": "string-substring",
+        "body": "string-substring ${1:expr} ${2:start} ${3:end}",
+        "description": "string-substring"
+    },
+    "exists": {
+        "scope": "source.lynx",
+        "prefix": "exists",
+        "body": "exists ${1:pathExpr}",
+        "description": "exists"
+    },
+    "mod": {
+        "scope": "source.lynx",
+        "prefix": "mod",
+        "body": "mod ${1:dividend} ${2:divisor}",
+        "description": "mod"
+    },
+    "shl": {
+        "scope": "source.lynx",
+        "prefix": "shl",
+        "body": "shl ${1:lhs} ${2:rhs}",
+        "description": "shl"
+    },
+    "shr": {
+        "scope": "source.lynx",
+        "prefix": "shr",
+        "body": "shr ${1:lhs} ${2:rhs}",
+        "description": "shr"
+    },
+    "range": {
+        "scope": "source.lynx",
+        "prefix": "range",
+        "body": "range ${1:fromIncl} ${2:toExcl}",
+        "description": "range"
+    },
+    "add": {
+        "scope": "source.lynx",
+        "prefix": "add",
+        "body": "add ${1:lhs} ${2:rhs}",
+        "description": "add"
+    },
+    "sub": {
+        "scope": "source.lynx",
+        "prefix": "sub",
+        "body": "sub ${1:lhs} ${2:rhs}",
+        "description": "sub"
+    },
+    "mul": {
+        "scope": "source.lynx",
+        "prefix": "mul",
+        "body": "mul ${1:lhs} ${2:rhs}",
+        "description": "mul"
+    },
+    "div": {
+        "scope": "source.lynx",
+        "prefix": "div",
+        "body": "div ${1:lhs} ${2:rhs}",
+        "description": "div"
+    },
+    "gt": {
+        "scope": "source.lynx",
+        "prefix": "gt",
+        "body": "gt ${1:lhs} ${2:rhs}",
+        "description": "gt"
+    },
+    "lt": {
+        "scope": "source.lynx",
+        "prefix": "lt",
+        "body": "lt ${1:lhs} ${2:rhs}",
+        "description": "lt"
+    },
+    "ge": {
+        "scope": "source.lynx",
+        "prefix": "ge",
+        "body": "ge ${1:lhs} ${2:rhs}",
+        "description": "ge"
+    },
+    "le": {
+        "scope": "source.lynx",
+        "prefix": "le",
+        "body": "le ${1:lhs} ${2:rhs}",
+        "description": "le"
+    },
+    "and": {
+        "scope": "source.lynx",
+        "prefix": "and",
+        "body": "and ${1:lhs} ${2:rhs}",
+        "description": "and"
+    },
+    "or": {
+        "scope": "source.lynx",
+        "prefix": "or",
+        "body": "or ${1:lhs} ${2:rhs}",
+        "description": "or"
+    },
+    "not": {
+        "scope": "source.lynx",
+        "prefix": "not",
+        "body": "not ${1:expr}",
+        "description": "not"
+    },
+    "len": {
+        "scope": "source.lynx",
+        "prefix": "len",
+        "body": "len ${1:iterable}",
+        "description": "len"
+    },
+    "get": {
+        "scope": "source.lynx",
+        "prefix": "get",
+        "body": "get ${1:iterable} ${2:index}",
+        "description": "get"
+    },
+    "set": {
+        "scope": "source.lynx",
+        "prefix": "set",
+        "body": "set ${1:iterable} ${2:index} ${3:value}",
+        "description": "set"
+    },
+    "append": {
+        "scope": "source.lynx",
+        "prefix": "append",
+        "body": "append ${1:iterable} ${2:value}",
+        "description": "append"
+    },
+    "remove": {
+        "scope": "source.lynx",
+        "prefix": "remove",
+        "body": "remove ${1:iterable} ${2:index}",
+        "description": "remove"
+    },
+    "inc": {
+        "scope": "source.lynx",
+        "prefix": "inc",
+        "body": "inc ${1:expr}",
+        "description": "inc"
+    },
+    "dec": {
+        "scope": "source.lynx",
+        "prefix": "dec",
+        "body": "dec ${1:expr}",
+        "description": "dec"
+    }
+}

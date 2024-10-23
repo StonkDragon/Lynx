@@ -18,7 +18,8 @@ enum class EntryType {
     String = 1,
     Number,
     List,
-    Compound
+    Compound,
+    Function
 };
 
 std::ostream& operator<<(std::ostream& out, EntryType type);
@@ -447,6 +448,17 @@ struct Type {
     EntryType type;
     Type* listType;
     std::vector<CompoundType>* compoundTypes;
+};
+
+struct FunctionEntry : public ConfigEntry {
+    std::vector<Type::CompoundType> args;
+    std::vector<Token> body;
+
+    FunctionEntry();
+    bool operator==(const ConfigEntry& other) override;
+    bool operator!=(const ConfigEntry& other) override;
+    void print(std::ostream& stream, int indent = 0) override;
+    ConfigEntry* clone() override;
 };
 
 struct ConfigParser {

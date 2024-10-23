@@ -445,6 +445,36 @@ void CompoundEntry::print(std::ostream& stream, int indent) {
     }
 }
 
+FunctionEntry::FunctionEntry() {
+    this->setType(EntryType::Function);
+}
+
+bool FunctionEntry::operator==(const ConfigEntry& other) {
+    if (other.getType() != this->getType()) return false;
+    // todo: implement
+    return true;
+}
+bool FunctionEntry::operator!=(const ConfigEntry& other) {
+    return !operator==(other);
+}
+void FunctionEntry::print(std::ostream& stream, int indent) {
+    stream << std::string(indent, ' ');
+    if (this->getKey().size()) {
+        stream << this->getKey() << ": ";
+    } 
+    stream << "func ( ";
+    for (auto&& arg : this->args) {
+        stream << arg.key << " ";
+    }
+    stream << ")" << std::endl;
+}
+ConfigEntry* FunctionEntry::clone() {
+    FunctionEntry* newFunc = new FunctionEntry();
+    newFunc->body = this->body;
+    newFunc->args = this->args;
+    return newFunc;
+}
+
 bool isValidIdentifier(char c) {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
 }
@@ -724,6 +754,9 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i) {
             } catch (const std::out_of_range& e) {
                 LYNX_ERR << "Failed to parse number: " << e.what() << std::endl;
                 return nullptr;
+            } catch (const std::invalid_argument& e) {
+                LYNX_ERR << "Invalid argument to stod(): " << tokens[i].value << std::endl;
+                return nullptr;
             }
             return entry;
         }
@@ -739,6 +772,32 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i) {
                 if (!entry) {
                     LYNX_ERR << "Failed to find entry by path '" << path << "'" << std::endl;
                     return nullptr;
+                }
+                if (entry->getType() == EntryType::Function) {
+                    FunctionEntry* func = (FunctionEntry*) entry;
+                    int tmp = 0;
+                    CompoundEntry* args = new CompoundEntry();
+                    i++;
+                    for (size_t n = 0; n < func->args.size(); n++) {
+                        ConfigEntry* arg = parseValue(tokens, i);
+                        if (!arg) {
+                            LYNX_ERR << "Failed to parse argument" << std::endl;
+                            return nullptr;
+                        }
+                        if (!checkTypes(arg, func->args[n].type, {})) {
+                            LYNX_ERR << "Invalid argument type" << std::endl;
+                            return nullptr;
+                        }
+                        arg->setKey(func->args[n].key);
+                        args->add(arg);
+                        i++;
+                    }
+                    i--;
+                    this->compoundStack.push_back(args);
+                    int x = 0;
+                    ConfigEntry* result = this->parseValue(func->body, x);
+                    this->compoundStack.pop_back();
+                    return result;
                 }
                 return entry;
             }
@@ -786,6 +845,9 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i) {
                 }
             }
             return finalEntry;
+        }
+        case Token::Dot: {
+            return compoundStack.back()->clone();
         }
         default:
             LYNX_ERR << "Invalid token: " << tokens[i].value << std::endl;
@@ -878,7 +940,7 @@ std::vector<Type::CompoundType>* ConfigParser::parseCompoundTypes(std::vector<To
     i++;
     while (tokens.size() > 0 && tokens[i].type != Token::CompoundEnd) {
         if (tokens[i].type != Token::Identifier) {
-            LYNX_ERR << "Invalid key: " << tokens[i].value << std::endl;
+            LYNX_ERR << "Invalid type specification: " << tokens[i].value << std::endl;
             compoundStack.pop_back();
             return nullptr;
         }
@@ -916,7 +978,7 @@ CompoundEntry* ConfigParser::parseCompound(std::vector<Token>& tokens, int& i) {
         return nullptr;
     }
     i++;
-    while (tokens.size() > 0 && tokens[i].type != Token::CompoundEnd) {
+    while (i < tokens.size() && tokens[i].type != Token::CompoundEnd) {
         if (tokens[i].type != Token::Identifier) {
             LYNX_ERR << "Invalid key: " << tokens[i].value << std::endl;
             compoundStack.pop_back();
