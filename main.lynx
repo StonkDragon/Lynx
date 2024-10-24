@@ -1,15 +1,15 @@
 Person = compound {
-    firstName = string
-    lastName = string
+    name = string
+    age = number
 }
 
-Person-greet: func(person = Person) (
-    printLn ("Hello, " person.firstName " " person.lastName "!")
-)
+John: {
+    name: "John"
+    age: 25
 
-john: {
-    firstName: "John"
-    lastName: "Doe"
+    greet: func Person () (
+        printLn ("Hello, " self.name)
+    )
 }
 
-_: Person-greet john
+_: John.greet

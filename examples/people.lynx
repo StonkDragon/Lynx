@@ -1,0 +1,27 @@
+:use "Person.lynx" -- merges the file Person.lynx into this file
+
+john: {
+    :Person
+
+    greeting: "I am John!"
+
+    first-name: "John"
+    last-name: "Doe"
+}
+
+james: {
+    :Person
+
+    first-name: "James"
+    last-name: "Smith"
+}
+
+do-something: func Person.Person (with = Person.Person) (
+    printLn (self.first-name " does something with " with.first-name)
+)
+
+_: james.greet
+_: john.greet
+_: do-something james john
+_: john.goodbye
+_: james.goodbye

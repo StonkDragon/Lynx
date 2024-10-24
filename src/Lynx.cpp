@@ -9,10 +9,10 @@
 #define LYNX_VERSION "0.0.1"
 #endif
 
-ConfigEntry* byPath(std::string value, ConfigParser* parser) {
+ConfigEntry* byPath(std::string value, std::vector<CompoundEntry*>& compoundStack) {
     ConfigEntry* entry = nullptr;
-    for (size_t i = parser->compoundStack.size(); i > 0 && !entry; i--) {
-        entry = parser->compoundStack[i - 1]->getByPath(value);
+    for (size_t i = compoundStack.size(); i > 0 && !entry; i--) {
+        entry = compoundStack[i - 1]->getByPath(value);
     }
     if (!entry) {
         return nullptr;
@@ -58,13 +58,23 @@ bool add(ConfigEntry* finalEntry, ConfigEntry* entry) {
     return true;
 }
 
-std::unordered_map<std::string, Command> commands{
-    std::pair("func", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+std::unordered_map<std::string, Command> commands {
+    std::pair("func", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         FunctionEntry* entry = new FunctionEntry();
         i++;
-        if (i >= tokens.size() || tokens[i].type != Token::BlockStart) {
-            LYNX_ERR << "Expected block start but got " << tokens[i].value << std::endl;
+        if (i >= tokens.size()) {
+            LYNX_ERR << "Expected block start or type but got " << tokens[i].value << std::endl;
             return nullptr;
+        }
+        if (tokens[i].type != Token::BlockStart) {
+            Type* t = parser->parseType(tokens, i, compoundStack);
+            if (!t) {
+                LYNX_ERR << "Failed to parse type" << std::endl;
+                return nullptr;
+            }
+            entry->args.push_back({"self", t});
+            entry->isDotCallable = true;
+            i++;
         }
         i++;
         while (i < tokens.size() && tokens[i].type != Token::BlockEnd) {
@@ -79,7 +89,7 @@ std::unordered_map<std::string, Command> commands{
                 return nullptr;
             }
             i++;
-            Type* type = parser->parseType(tokens, i);
+            Type* type = parser->parseType(tokens, i, compoundStack);
             if (!type) {
                 LYNX_ERR << "Failed to parse type for argument '" << name << "'" << std::endl;
                 return nullptr;
@@ -107,21 +117,22 @@ std::unordered_map<std::string, Command> commands{
         }
         i--;
         entry->body = body;
+        entry->compoundStack = compoundStack;
         return entry;
     }),
-    std::pair("true", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("true", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         NumberEntry* entry = new NumberEntry();
         entry->setValue(1);
         return entry;
     }),
-    std::pair("false", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("false", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         NumberEntry* entry = new NumberEntry();
         entry->setValue(0);
         return entry;
     }),
-    std::pair("runshell", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("runshell", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* result = parser->parseValue(tokens, i);
+        ConfigEntry* result = parser->parseValue(tokens, i, compoundStack);
         if (!result) {
             LYNX_ERR << "Failed to parse runshell block" << std::endl;
             return nullptr;
@@ -146,9 +157,9 @@ std::unordered_map<std::string, Command> commands{
         entry->setValue(output);
         return entry;
     }),
-    std::pair("print", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("print", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* result = parser->parseValue(tokens, i);
+        ConfigEntry* result = parser->parseValue(tokens, i, compoundStack);
         if (!result) {
             LYNX_ERR << "Failed to parse print block" << std::endl;
             return nullptr;
@@ -157,7 +168,7 @@ std::unordered_map<std::string, Command> commands{
             case EntryType::String: std::cout << ((StringEntry*) result)->getValue(); break;
             case EntryType::Number:
                 try {
-                    std::cout << ((NumberEntry*) result)->getValue();
+                    std::cout << std::to_string(((NumberEntry*) result)->getValue());
                 } catch(const std::out_of_range& e) {
                     std::cerr << "Number is too large to print" << std::endl;
                 }
@@ -170,9 +181,9 @@ std::unordered_map<std::string, Command> commands{
         }
         return new StringEntry();
     }),
-    std::pair("use", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("use", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* result = parser->parseValue(tokens, i);
+        ConfigEntry* result = parser->parseValue(tokens, i, compoundStack);
         if (!result) {
             LYNX_ERR << "Failed to parse use block" << std::endl;
             return nullptr;
@@ -189,9 +200,9 @@ std::unordered_map<std::string, Command> commands{
         }
         return entry;
     }),
-    std::pair("printLn", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("printLn", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* result = parser->parseValue(tokens, i);
+        ConfigEntry* result = parser->parseValue(tokens, i, compoundStack);
         if (!result) {
             LYNX_ERR << "Failed to parse printLn block" << std::endl;
             return nullptr;
@@ -200,7 +211,7 @@ std::unordered_map<std::string, Command> commands{
             case EntryType::String: std::cout << ((StringEntry*) result)->getValue() << std::endl; break;
             case EntryType::Number:
                 try {
-                    std::cout << ((NumberEntry*) result)->getValue() << std::endl;
+                    std::cout << std::to_string(((NumberEntry*) result)->getValue()) << std::endl;
                 } catch(const std::out_of_range& e) {
                     std::cerr << "Number is too large to print" << std::endl;
                 }
@@ -213,14 +224,14 @@ std::unordered_map<std::string, Command> commands{
         }
         return new StringEntry();
     }),
-    std::pair("readLn", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("readLn", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         std::string line;
         std::getline(std::cin, line);
         StringEntry* entry = new StringEntry();
         entry->setValue(line);
         return entry;
     }),
-    std::pair("for", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("for", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
         if (i >= tokens.size() || tokens[i].type != Token::Identifier) {
             LYNX_ERR << "Invalid for loop: Expected identifier" << std::endl;
@@ -237,7 +248,7 @@ std::unordered_map<std::string, Command> commands{
             return nullptr;
         }
         i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i);
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
         i++;
         if (!entry) {
             entry = new ListEntry();
@@ -280,15 +291,15 @@ std::unordered_map<std::string, Command> commands{
             auto value = list->get(i);
             value->setKey(iterVar);
             compound = new CompoundEntry();
-            parser->compoundStack.push_back(compound);
+            compoundStack.push_back(compound);
             compound->add(value);
             int newI = 0;
-            ConfigEntry* next = parser->parseValue(forBody, newI);
+            ConfigEntry* next = parser->parseValue(forBody, newI, compoundStack);
             if (!next) {
                 LYNX_ERR << "Failed to parse for loop block" << std::endl;
                 return nullptr;
             }
-            parser->compoundStack.pop_back();
+            compoundStack.pop_back();
             if (!result) {
                 result = next;
             } else if (next->getType() != result->getType()) {
@@ -305,26 +316,26 @@ std::unordered_map<std::string, Command> commands{
         }
         return result;
     }),
-    std::pair("equals", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("eq", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* entryA = parser->parseValue(tokens, i);
+        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack);
         i++;
-        ConfigEntry* entryB = parser->parseValue(tokens, i);
+        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack);
         if (!entryA || !entryB) {
-            LYNX_ERR << "Failed to parse equals block" << std::endl;
+            LYNX_ERR << "Failed to parse eq block" << std::endl;
             return nullptr;
         }
         if (entryA->getType() != entryB->getType()) {
-            LYNX_ERR << "Invalid entry type in equals block. Expected " << entryA->getType() << " but got " << entryB->getType() << std::endl;
+            LYNX_ERR << "Invalid entry type in eq block. Expected " << entryA->getType() << " but got " << entryB->getType() << std::endl;
             return nullptr;
         }
         NumberEntry* result = new NumberEntry();
         result->setValue(entryA->operator==(*entryB) ? 1 : 0);
         return result;
     }),
-    std::pair("string-length", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("string-length", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i);
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
         if (!entry) {
             LYNX_ERR << "Failed to parse string-length block" << std::endl;
             return nullptr;
@@ -337,13 +348,13 @@ std::unordered_map<std::string, Command> commands{
         result->setValue(((StringEntry*) entry)->getValue().length());
         return result;
     }),
-    std::pair("string-substring", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("string-substring", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* str = parser->parseValue(tokens, i);
+        ConfigEntry* str = parser->parseValue(tokens, i, compoundStack);
         i++;
-        ConfigEntry* start = parser->parseValue(tokens, i);
+        ConfigEntry* start = parser->parseValue(tokens, i, compoundStack);
         i++;
-        ConfigEntry* end = parser->parseValue(tokens, i);
+        ConfigEntry* end = parser->parseValue(tokens, i, compoundStack);
         if (!str || !start || !end) {
             LYNX_ERR << "Failed to parse string-substring block" << std::endl;
             return nullptr;
@@ -361,8 +372,8 @@ std::unordered_map<std::string, Command> commands{
             return nullptr;
         }
         std::string value = ((StringEntry*) str)->getValue();
-        int startValue = ((NumberEntry*) start)->getValue();
-        int endValue = ((NumberEntry*) end)->getValue();
+        long long startValue = ((NumberEntry*) start)->getValue();
+        long long endValue = ((NumberEntry*) end)->getValue();
         if (startValue < 0 || startValue >= value.size() || endValue < 0 || endValue >= value.size()) {
             LYNX_ERR << "Invalid start or end value in string-substring block" << std::endl;
             return nullptr;
@@ -371,9 +382,9 @@ std::unordered_map<std::string, Command> commands{
         result->setValue(value.substr(startValue, endValue));
         return result;
     }),
-    std::pair("if", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("if", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i);
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
         i++;
         if (!entry) {
             LYNX_ERR << "Failed to parse value" << std::endl;
@@ -433,7 +444,7 @@ std::unordered_map<std::string, Command> commands{
         std::vector<Token>& ifBlockToUse = condition ? ifBlock : elseBlock;
 
         int newI = 0;
-        ConfigEntry* result = parser->parseValue(ifBlockToUse, newI);
+        ConfigEntry* result = parser->parseValue(ifBlockToUse, newI, compoundStack);
         if (!result) {
             LYNX_ERR << "Failed to parse if block" << std::endl;
             return nullptr;
@@ -441,20 +452,20 @@ std::unordered_map<std::string, Command> commands{
 
         return result;
     }),
-    std::pair("exists", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("exists", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
         std::string path = makePath(tokens, i);
-        ConfigEntry* entry = byPath(path, parser);
+        ConfigEntry* entry = byPath(path, compoundStack);
         
         bool condition = entry != nullptr;
         NumberEntry* result = new NumberEntry();
         result->setValue(condition ? 1 : 0);
         return result;
     }),
-    std::pair("validate", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("validate", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
         std::string path = makePath(tokens, i);
-        ConfigEntry* entry = byPath(path, parser);
+        ConfigEntry* entry = byPath(path, compoundStack);
         if (!entry) {
             LYNX_ERR << "Failed to find entry '" << path << "'" << std::endl;
             return nullptr;
@@ -473,22 +484,27 @@ std::unordered_map<std::string, Command> commands{
             }
             i++;
         }
-        Type* type = parser->parseType(tokens, i);
-        if (!type) {
+        ConfigEntry* typeEntry = parser->parseValue(tokens, i, compoundStack);
+        if (!typeEntry) {
             LYNX_ERR << "Failed to parse type" << std::endl;
             return nullptr;
         }
+        if (typeEntry->getType() != EntryType::Type) {
+            LYNX_ERR << "Invalid entry type in validate block. Expected Type but got " << typeEntry->getType() << std::endl;
+            return nullptr;
+        }
+        Type* type = ((TypeEntry*) typeEntry)->type;
         NumberEntry* result = new NumberEntry();
-        result->setValue(parser->checkTypes(entry, type, flags) == true);
+        result->setValue(type->validate(entry, flags) == true);
         return result;
     }),
 
 #define BINARY_OP(_name, _op) \
-    std::pair(_name, [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* { \
+    std::pair(_name, [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* { \
         i++; \
-        ConfigEntry* entryA = parser->parseValue(tokens, i); \
+        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack); \
         i++; \
-        ConfigEntry* entryB = parser->parseValue(tokens, i); \
+        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack); \
         if (!entryA || !entryB) { \
             LYNX_ERR << "Failed to parse " _name " block" << std::endl; \
             return nullptr; \
@@ -519,15 +535,15 @@ std::unordered_map<std::string, Command> commands{
 
 #undef BINARY_OP
 #define UNARY_OP(_name, _op) \
-    std::pair(_name, [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* { \
+    std::pair(_name, [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* { \
         i++; \
-        ConfigEntry* entry = parser->parseValue(tokens, i); \
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack); \
         if (!entry) { \
-            LYNX_ERR << "Failed to parse " #_op " block" << std::endl; \
+            LYNX_ERR << "Failed to parse " _name " block" << std::endl; \
             return nullptr; \
         } \
         if (entry->getType() != EntryType::Number) { \
-            LYNX_ERR << "Invalid entry type in " #_op " block. Expected Number but got " << entry->getType() << std::endl; \
+            LYNX_ERR << "Invalid entry type in " _name " block. Expected Number but got " << entry->getType() << std::endl; \
             return nullptr; \
         } \
         NumberEntry* result = new NumberEntry(); \
@@ -538,11 +554,11 @@ std::unordered_map<std::string, Command> commands{
     UNARY_OP("not", !)
     
 #undef UNARY_OP
-    std::pair("mod", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("mod", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* entryA = parser->parseValue(tokens, i);
+        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack);
         i++;
-        ConfigEntry* entryB = parser->parseValue(tokens, i);
+        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack);
         if (!entryA || !entryB) {
             LYNX_ERR << "Failed to parse modulo block" << std::endl;
             return nullptr;
@@ -559,11 +575,11 @@ std::unordered_map<std::string, Command> commands{
         result->setValue(std::fmod(((NumberEntry*) entryA)->getValue(), ((NumberEntry*) entryB)->getValue()));
         return result;
     }),
-    std::pair("shl", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("shl", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* entryA = parser->parseValue(tokens, i);
+        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack);
         i++;
-        ConfigEntry* entryB = parser->parseValue(tokens, i);
+        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack);
         if (!entryA || !entryB) {
             LYNX_ERR << "Failed to parse left shift block" << std::endl;
             return nullptr;
@@ -580,11 +596,11 @@ std::unordered_map<std::string, Command> commands{
         result->setValue((long long) ((NumberEntry*) entryA)->getValue() << (long long) ((NumberEntry*) entryB)->getValue());
         return result;
     }),
-    std::pair("shr", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("shr", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* entryA = parser->parseValue(tokens, i);
+        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack);
         i++;
-        ConfigEntry* entryB = parser->parseValue(tokens, i);
+        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack);
         if (!entryA || !entryB) {
             LYNX_ERR << "Failed to parse right shift block" << std::endl;
             return nullptr;
@@ -601,11 +617,11 @@ std::unordered_map<std::string, Command> commands{
         result->setValue((long long) ((NumberEntry*) entryA)->getValue() >> (long long) ((NumberEntry*) entryB)->getValue());
         return result;
     }),
-    std::pair("range", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("range", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* entryA = parser->parseValue(tokens, i);
+        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack);
         i++;
-        ConfigEntry* entryB = parser->parseValue(tokens, i);
+        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack);
         if (!entryA || !entryB) {
             LYNX_ERR << "Failed to parse range block" << std::endl;
             return nullptr;
@@ -628,9 +644,9 @@ std::unordered_map<std::string, Command> commands{
         }
         return result;
     }),
-    std::pair("len", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("len", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* list = parser->parseValue(tokens, i);
+        ConfigEntry* list = parser->parseValue(tokens, i, compoundStack);
         if (!list) {
             LYNX_ERR << "Failed to parse range block" << std::endl;
             return nullptr;
@@ -643,9 +659,9 @@ std::unordered_map<std::string, Command> commands{
         result->setValue(((ListEntry*) list)->size());
         return result;
     }),
-    std::pair("get", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("get", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* list = parser->parseValue(tokens, i);
+        ConfigEntry* list = parser->parseValue(tokens, i, compoundStack);
         if (!list) {
             LYNX_ERR << "Failed to parse list" << std::endl;
             return nullptr;
@@ -655,7 +671,7 @@ std::unordered_map<std::string, Command> commands{
             return nullptr;
         }
         i++;
-        ConfigEntry* index = parser->parseValue(tokens, i);
+        ConfigEntry* index = parser->parseValue(tokens, i, compoundStack);
         if (!index) {
             LYNX_ERR << "Failed to parse index" << std::endl;
             return nullptr;
@@ -672,9 +688,9 @@ std::unordered_map<std::string, Command> commands{
         }
         return listEntry->get(idx)->clone();
     }),
-    std::pair("set", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("set", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* list = parser->parseValue(tokens, i);
+        ConfigEntry* list = parser->parseValue(tokens, i, compoundStack);
         if (!list) {
             LYNX_ERR << "Failed to parse range block" << std::endl;
             return nullptr;
@@ -684,7 +700,7 @@ std::unordered_map<std::string, Command> commands{
             return nullptr;
         }
         i++;
-        ConfigEntry* index = parser->parseValue(tokens, i);
+        ConfigEntry* index = parser->parseValue(tokens, i, compoundStack);
         if (!index) {
             LYNX_ERR << "Failed to parse index" << std::endl;
             return nullptr;
@@ -694,7 +710,7 @@ std::unordered_map<std::string, Command> commands{
             return nullptr;
         }
         i++;
-        ConfigEntry* value = parser->parseValue(tokens, i);
+        ConfigEntry* value = parser->parseValue(tokens, i, compoundStack);
         if (!value) {
             LYNX_ERR << "Failed to parse value" << std::endl;
             return nullptr;
@@ -712,9 +728,9 @@ std::unordered_map<std::string, Command> commands{
         listEntry->get(idx) = value->clone();
         return new StringEntry();
     }),
-    std::pair("append", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("append", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* list = parser->parseValue(tokens, i);
+        ConfigEntry* list = parser->parseValue(tokens, i, compoundStack);
         if (!list) {
             LYNX_ERR << "Failed to parse range block" << std::endl;
             return nullptr;
@@ -724,7 +740,7 @@ std::unordered_map<std::string, Command> commands{
             return nullptr;
         }
         i++;
-        ConfigEntry* value = parser->parseValue(tokens, i);
+        ConfigEntry* value = parser->parseValue(tokens, i, compoundStack);
         if (!value) {
             LYNX_ERR << "Failed to parse value" << std::endl;
             return nullptr;
@@ -737,9 +753,9 @@ std::unordered_map<std::string, Command> commands{
         listEntry->add(value->clone());
         return new StringEntry();
     }),
-    std::pair("remove", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("remove", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* list = parser->parseValue(tokens, i);
+        ConfigEntry* list = parser->parseValue(tokens, i, compoundStack);
         if (!list) {
             LYNX_ERR << "Failed to parse range block" << std::endl;
             return nullptr;
@@ -749,7 +765,7 @@ std::unordered_map<std::string, Command> commands{
             return nullptr;
         }
         i++;
-        ConfigEntry* index = parser->parseValue(tokens, i);
+        ConfigEntry* index = parser->parseValue(tokens, i, compoundStack);
         if (!index) {
             LYNX_ERR << "Failed to parse index" << std::endl;
             return nullptr;
@@ -767,9 +783,9 @@ std::unordered_map<std::string, Command> commands{
         listEntry->remove(idx);
         return new StringEntry();
     }),
-    std::pair("inc", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("inc", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i);
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
         if (!entry) {
             LYNX_ERR << "Failed to parse inc block" << std::endl;
             return nullptr;
@@ -782,9 +798,9 @@ std::unordered_map<std::string, Command> commands{
         result->setValue(((NumberEntry*) entry)->getValue() + 1);
         return result;
     }),
-    std::pair("dec", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("dec", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i);
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
         if (!entry) {
             LYNX_ERR << "Failed to parse dec block" << std::endl;
             return nullptr;
@@ -797,9 +813,9 @@ std::unordered_map<std::string, Command> commands{
         result->setValue(((NumberEntry*) entry)->getValue() - 1);
         return result;
     }),
-    std::pair("exit", [](std::vector<Token> &tokens, int &i, ConfigParser* parser) -> ConfigEntry* {
+    std::pair("exit", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i);
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
         if (!entry) {
             LYNX_ERR << "Failed to parse exit block" << std::endl;
             return nullptr;

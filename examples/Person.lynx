@@ -1,0 +1,22 @@
+Person: {
+    Person = compound {
+        first-name = string
+        last-name = string
+    }
+
+    greeting: func Person () (
+        "Hello, " self.first-name " " self.last-name "!"
+    )
+
+    parting: func Person () (
+        "Goodbye " self.first-name " " self.last-name "!"
+    )
+
+    greet: func Person () (
+        printLn self.greeting
+    )
+
+    goodbye: func Person () (
+        printLn self.parting
+    )
+}

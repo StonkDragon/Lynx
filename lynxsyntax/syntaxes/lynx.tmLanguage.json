@@ -24,7 +24,7 @@
 				"match": "\\b(if|for|in|else)\\b"
 			},{
 				"name": "keyword.control",
-				"match": "\\b(true|false|runshell|print|use|printLn|readLn|for|equals|string-length|string-substring|if|exists|validate|mod|range|optional|add|sub|mul|div|gt|lt|ge|le|or|and|not|len|get|set|append|remove|inc|dec)\\b"
+				"match": "\\b(true|false|runshell|print|use|printLn|readLn|for|eq|string-length|string-substring|if|exists|validate|mod|range|optional|add|sub|mul|div|gt|lt|ge|le|or|and|not|len|get|set|append|remove|inc|dec)\\b"
 			},{
 				"name": "keyword.control",
 				"match": "\\b(compound|list|string|number)\\b"

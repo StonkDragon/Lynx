@@ -31,6 +31,34 @@
         "body": "${0:0}",
         "description": "Number"
     },
+    "CompoundType": {
+		"scope": "source.lynx",
+		"prefix": "CompoundType",
+		"body": [
+			"compound {",
+            "\t$0",
+            "}"
+		],
+		"description": "Compound"
+	},
+    "ListType": {
+        "scope": "source.lynx",
+        "prefix": "ListType",
+        "body": "list [${0:type}]",
+        "description": "List"
+    },
+    "StringType": {
+        "scope": "source.lynx",
+        "prefix": "StringType",
+        "body": "string",
+        "description": "String"
+    },
+    "NumberType": {
+        "scope": "source.lynx",
+        "prefix": "NumberType",
+        "body": "number",
+        "description": "Number"
+    },
     "true": {
         "scope": "source.lynx",
         "prefix": "true",
@@ -115,11 +143,11 @@
         ],
         "description": "else"
     },
-    "equals": {
+    "eq": {
         "scope": "source.lynx",
-        "prefix": "equals",
-        "body": "equals ${1:expr} ${2:expr}",
-        "description": "equals"
+        "prefix": "eq",
+        "body": "eq ${1:expr} ${2:expr}",
+        "description": "eq"
     },
     "string-length": {
         "scope": "source.lynx",

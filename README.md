@@ -31,6 +31,45 @@ Any values contained in `()` get concatenated into a single value. All values mu
 - List: `[1, 2, 3]`
 - Compound: `{key: value}`
 
+### Type assignment
+Values can also be assigned a type, which can then be used in all contexts where a type is valid:
+```
+Person = compound {
+    first-name = string
+    last-name = string
+}
+```
+
+### Functions
+A function is a special kind of value that can be called with arguments:
+```
+square: func(x = number) (
+    mul x x
+)
+
+_: printLn (square 5) -- prints 25
+```
+
+### Pseudo-methods
+Pseudo-methods are functions that are called on a value:
+```
+Person = compound {
+    name = string
+    age = number
+}
+
+John: {
+    name: "John"
+    age: 25
+
+    greet: func Person () ( -- parent compound bound to 'self'
+        printLn ("Hello, " self.name)
+    )
+}
+
+_: John.greet
+```
+
 ### Expressions
 Expressions are a way to do some computation in the config file.
 ```

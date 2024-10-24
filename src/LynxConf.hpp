@@ -9,9 +9,14 @@
 typedef unsigned long u_long;
 #endif
 
-#define LYNX_LOG std::cout << "[Lynx Config] " << tokens[i].file << ":" << tokens[i].line << ":" << tokens[i].column << ": "
-#define LYNX_ERR std::cerr << "[Lynx Config] " << tokens[i].file << ":" << tokens[i].line << ":" << tokens[i].column << ": "
-#define LYNX_RT_ERR std::cerr << "[Lynx Config] "
+#define LYNX_LOG LYNX_LOG_TO(std::cout)
+#define LYNX_LOG_TO(_sink) _sink << "[Lynx Config] " << tokens[i].file << ":" << tokens[i].line << ":" << tokens[i].column << ": "
+
+#define LYNX_ERR LYNX_ERR_TO(std::cerr)
+#define LYNX_ERR_TO(_sink) _sink << "[Lynx Config] " << tokens[i].file << ":" << tokens[i].line << ":" << tokens[i].column << ": "
+
+#define LYNX_RT_ERR LYNX_RT_ERR_TO(std::cerr)
+#define LYNX_RT_ERR_TO(_sink) _sink << "[Lynx Config] "
 
 enum class EntryType {
     Invalid,
@@ -19,7 +24,8 @@ enum class EntryType {
     Number,
     List,
     Compound,
-    Function
+    Function,
+    Type
 };
 
 std::ostream& operator<<(std::ostream& out, EntryType type);
@@ -437,24 +443,48 @@ struct Token {
     std::string file;
     int line;
     int column;
+
+    bool operator==(const Token& other) const;
+    bool operator!=(const Token& other) const;
 };
 
 struct Type {
     struct CompoundType {
         std::string key;
         Type* type;
+
+        bool operator==(const CompoundType& other) const;
+        bool operator!=(const CompoundType& other) const;
     };
     
     EntryType type;
     Type* listType;
     std::vector<CompoundType>* compoundTypes;
+
+    bool validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out = std::cout);
+    Type* clone();
+    bool operator==(const Type& other) const;
+    bool operator!=(const Type& other) const;
 };
 
 struct FunctionEntry : public ConfigEntry {
     std::vector<Type::CompoundType> args;
     std::vector<Token> body;
+    std::vector<CompoundEntry*> compoundStack;
+    bool isDotCallable;
 
     FunctionEntry();
+    bool operator==(const ConfigEntry& other) override;
+    bool operator!=(const ConfigEntry& other) override;
+    void print(std::ostream& stream, int indent = 0) override;
+    ConfigEntry* clone() override;
+};
+
+struct TypeEntry : public ConfigEntry {
+    Type* type;
+
+    TypeEntry();
+    bool validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out = std::cout);
     bool operator==(const ConfigEntry& other) override;
     bool operator!=(const ConfigEntry& other) override;
     void print(std::ostream& stream, int indent = 0) override;
@@ -469,14 +499,11 @@ struct ConfigParser {
      */
     CompoundEntry* parse(const std::string& configFile);
     
-    Type* parseType(std::vector<Token>& tokens, int& i);
-    bool checkTypes(ConfigEntry* entry, Type* type, const std::vector<std::string>& flags);
-    std::vector<Type::CompoundType>* parseCompoundTypes(std::vector<Token>& tokens, int& i);
-    CompoundEntry* parseCompound(std::vector<Token>& tokens, int& i);
-    ListEntry* parseList(std::vector<Token>& tokens, int& i);
-    ConfigEntry* parseValue(std::vector<Token>& tokens, int& i);
-
-    std::vector<CompoundEntry*> compoundStack;
+    Type* parseType(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
+    std::vector<Type::CompoundType>* parseCompoundTypes(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
+    CompoundEntry* parseCompound(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
+    ListEntry* parseList(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
+    ConfigEntry* parseValue(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
 };
 
-using Command = std::function<ConfigEntry*(std::vector<Token>&, int&, ConfigParser*)>;
+using Command = std::function<ConfigEntry*(std::vector<Token>&, int&, ConfigParser*, std::vector<CompoundEntry*>&)>;

@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include <sstream>
 
 #include "LynxConf.hpp"
 
@@ -46,8 +47,14 @@ std::ostream& operator<<(std::ostream& out, EntryType type) {
         case EntryType::Compound:
             out << "Compound";
             break;
-        default:
-            out << "Unknown";
+        case EntryType::Function:
+            out << "Function";
+            break;
+        case EntryType::Type:
+            out << "Type";
+            break;
+        case EntryType::Invalid:
+            out << "Invalid";
             break;
     }
     return out;
@@ -447,11 +454,14 @@ void CompoundEntry::print(std::ostream& stream, int indent) {
 
 FunctionEntry::FunctionEntry() {
     this->setType(EntryType::Function);
+    this->isDotCallable = false;
 }
 
 bool FunctionEntry::operator==(const ConfigEntry& other) {
     if (other.getType() != this->getType()) return false;
-    // todo: implement
+    FunctionEntry* otherFunc = (FunctionEntry*) &other;
+    if (this->args != otherFunc->args) return false;
+    if (this->body != otherFunc->body) return false;
     return true;
 }
 bool FunctionEntry::operator!=(const ConfigEntry& other) {
@@ -472,6 +482,8 @@ ConfigEntry* FunctionEntry::clone() {
     FunctionEntry* newFunc = new FunctionEntry();
     newFunc->body = this->body;
     newFunc->args = this->args;
+    newFunc->compoundStack = this->compoundStack;
+    newFunc->isDotCallable = this->isDotCallable;
     return newFunc;
 }
 
@@ -509,7 +521,20 @@ std::vector<Token> tokenize(std::string file, std::string& data, int& i) {
             token.value = "";
             c = next({});
             while (c != '"' && c != '\0') {
-                token.value += c;
+                if (c == '\\') {
+                    c = next({});
+                    switch (c) {
+                        case 'n': token.value += '\n'; break;
+                        case 'r': token.value += '\r'; break;
+                        case 't': token.value += '\t'; break;
+                        case '0': token.value += '\0'; break;
+                        case '\\': token.value += '\\'; break;
+                        case '"': token.value += '"'; break;
+                        default: LYNX_ERR << "Invalid escape sequence: \\" << c << std::endl; return tokens;
+                    }
+                } else {
+                    token.value += c;
+                }
                 c = next({});
             }
             if (c == '\0') {
@@ -605,7 +630,12 @@ CompoundEntry* ConfigParser::parse(const std::string& configFile) {
         return nullptr;
     }
     i = 0;
-    CompoundEntry* rootEntry = parseCompound(tokens, i);
+    std::vector<CompoundEntry*> compoundStack;
+    CompoundEntry* rootEntry = parseCompound(tokens, i, compoundStack);
+    if (!rootEntry) {
+        LYNX_ERR << "Failed to parse compound" << std::endl;
+        return nullptr;
+    }
     rootEntry->setKey(".root");
     return rootEntry;
 }
@@ -639,7 +669,142 @@ ConfigEntry* CompoundEntry::clone() {
     return entry;
 }
 
-ListEntry* ConfigParser::parseList(std::vector<Token>& tokens, int& i) {
+bool Type::validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out) {
+    bool hasError = false;
+
+    bool optional = std::find(flags.begin(), flags.end(), "optional") != flags.end();
+    if (what->getType() != this->type) {
+        LYNX_RT_ERR_TO(out) << "Invalid entry type. Expected " << this->type << " but got " << what->getType() << std::endl;
+        return false;
+    }
+    
+    if (what->getType() == EntryType::List) {
+        ListEntry* list = (ListEntry*) what;
+        if (list->isEmpty()) {
+            return true;
+        }
+        if (list->getListType() == EntryType::Invalid) {
+            LYNX_RT_ERR_TO(out) << "Invalid entry type in list '" << what->getKey() << "'. Expected " << this->listType->type << " but got Invalid" << std::endl;
+            return false;
+        }
+        if (!this->listType->validate(list->get(0), flags, out)) {
+            LYNX_RT_ERR_TO(out) << "Invalid entry type in list '" << what->getKey() << "'. Expected " << this->listType->type << " but got " << list->getListType() << std::endl;
+            hasError = true;
+        }
+    } else if (what->getType() == EntryType::Compound) {
+        CompoundEntry* compound = (CompoundEntry*) what;
+        for (size_t i = 0; i < this->compoundTypes->size(); i++) {
+            Type::CompoundType compoundType = this->compoundTypes->at(i);
+            if (!compound->hasMember(compoundType.key)) {
+                if (optional) {
+                    continue;
+                }
+                LYNX_RT_ERR_TO(out) << "Missing property '" << compoundType.key << "' in compound '" << what->getKey() << "'" << std::endl;
+                hasError = true;
+                continue;
+            }
+            if (!compoundType.type->validate(compound->get(compoundType.key), flags, out)) {
+                LYNX_RT_ERR_TO(out) << "Member '" << compoundType.key << "' of compound '" << what->getKey() << "' is type " << compound->get(compoundType.key)->getType() << " but expected " << compoundType.type->type << std::endl;
+                hasError = true;
+            }
+        }
+    }
+    return !hasError;
+}
+
+bool Type::operator==(const Type& other) const {
+    if (this->type != other.type) return false;
+    switch (this->type) {
+        case EntryType::List: return this->listType->operator==(*other.listType);
+        case EntryType::Compound: [[fallthrough]];
+        case EntryType::Function: {
+            if (!this->compoundTypes || !other.compoundTypes) {
+                return false;
+            }
+            if (this->compoundTypes->size() != other.compoundTypes->size()) {
+                return false;
+            }
+            for (size_t i = 0; i < this->compoundTypes->size(); i++) {
+                if (this->compoundTypes->at(i).key != other.compoundTypes->at(i).key) {
+                    return false;
+                }
+                if (!this->compoundTypes->at(i).type->operator==(*other.compoundTypes->at(i).type)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        default: return true;
+    }
+}
+
+bool Type::operator!=(const Type& other) const {
+    return !operator==(other);
+}
+
+Type* Type::clone() {
+    Type* t = new Type();
+    t->type = this->type;
+    if (this->listType) t->listType = this->listType->clone();
+    if (this->compoundTypes) {
+        t->compoundTypes = new std::vector<CompoundType>();
+        *t->compoundTypes = *this->compoundTypes;
+    }
+    return t;
+}
+
+bool Type::CompoundType::operator==(const Type::CompoundType& other) const {
+    return this->key == other.key && this->type->operator==(*other.type);
+}
+
+bool Type::CompoundType::operator!=(const Type::CompoundType& other) const {
+    return !operator==(other);
+}
+
+bool Token::operator==(const Token& other) const {
+    return this->type == other.type && this->value == other.value;
+}
+
+bool Token::operator!=(const Token& other) const {
+    return !operator==(other);
+}
+
+TypeEntry::TypeEntry() {
+    this->setType(EntryType::Type);
+}
+
+bool TypeEntry::validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out) {
+    return type->validate(what, flags, out);
+}
+
+bool TypeEntry::operator==(const ConfigEntry& other) {
+    if (other.getType() != EntryType::Type) {
+        return false;
+    }
+    const TypeEntry& otherType = (const TypeEntry&) other;
+    return this->type->operator==(*otherType.type);
+}
+
+bool TypeEntry::operator!=(const ConfigEntry& other) {
+    return !operator==(other);
+}
+
+void TypeEntry::print(std::ostream& stream, int indent) {
+    stream << std::string(indent, ' ');
+    if (this->getKey().size()) {
+        stream << this->getKey() << ": ";
+    }
+    stream << "type " << this->type->type << std::endl;
+}
+
+ConfigEntry* TypeEntry::clone() {
+    TypeEntry* entry = new TypeEntry();
+    entry->setKey(this->getKey());
+    entry->type = this->type->clone();
+    return entry;
+}
+
+ListEntry* ConfigParser::parseList(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack) {
     ListEntry* list = new ListEntry();
     if (i >= tokens.size() || tokens[i].type != Token::ListStart) {
         LYNX_ERR << "Invalid list" << std::endl;
@@ -647,7 +812,7 @@ ListEntry* ConfigParser::parseList(std::vector<Token>& tokens, int& i) {
     }
     i++;
     while (i < tokens.size() && tokens[i].type != Token::ListEnd) {
-        ConfigEntry* entry = this->parseValue(tokens, i);
+        ConfigEntry* entry = this->parseValue(tokens, i, compoundStack);
         if (!entry) {
             LYNX_ERR << "Failed to parse value" << std::endl;
             return nullptr;
@@ -664,56 +829,21 @@ ListEntry* ConfigParser::parseList(std::vector<Token>& tokens, int& i) {
     return list;
 }
 
-bool ConfigParser::checkTypes(ConfigEntry* entry, Type* type, const std::vector<std::string>& flags) {
-    bool hasError = false;
-
-    bool optional = std::find(flags.begin(), flags.end(), "optional") != flags.end();
-    if (entry->getType() != type->type) {
-        LYNX_RT_ERR << "Invalid entry type. Expected " << type->type << " but got " << entry->getType() << std::endl;
-        return false;
-    }
-    
-    if (entry->getType() == EntryType::List) {
-        ListEntry* list = (ListEntry*) entry;
-        if (list->isEmpty()) {
-            return true;
-        }
-        if (list->getListType() == EntryType::Invalid) {
-            LYNX_RT_ERR << "Invalid entry type in list '" << entry->getKey() << "'. Expected " << type->listType->type << " but got Invalid" << std::endl;
-            return false;
-        }
-        if (!checkTypes(list->get(0), type->listType, flags)) {
-            LYNX_RT_ERR << "Invalid entry type in list '" << entry->getKey() << "'. Expected " << type->listType->type << " but got " << list->getListType() << std::endl;
-            hasError = true;
-        }
-    } else if (entry->getType() == EntryType::Compound) {
-        CompoundEntry* compound = (CompoundEntry*) entry;
-        for (size_t i = 0; i < type->compoundTypes->size(); i++) {
-            Type::CompoundType compoundType = type->compoundTypes->at(i);
-            if (!compound->hasMember(compoundType.key)) {
-                if (optional) {
-                    continue;
-                }
-                LYNX_RT_ERR << "Missing member '" << compoundType.key << "' in compound '" << entry->getKey() << "'" << std::endl;
-                hasError = true;
-                continue;
-            }
-            if (!checkTypes(compound->get(compoundType.key), compoundType.type, flags)) {
-                LYNX_RT_ERR << "Member '" << compoundType.key << "' of compound '" << entry->getKey() << "' is type " << compound->get(compoundType.key)->getType() << " but expected " << compoundType.type->type << std::endl;
-                hasError = true;
-            }
-        }
-    }
-    return !hasError;
-}
-
 extern std::unordered_map<std::string, Command> commands;
 
-ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i) {
-    auto byPath = [&i, this](std::string value) -> ConfigEntry* {
+ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack) {
+    auto byPath = [&i, &compoundStack](std::string value, ConfigEntry** pParent) -> ConfigEntry* {
         ConfigEntry* entry = nullptr;
+        ConfigEntry* parent = nullptr;
+        size_t x = value.find_last_of('.');
+        std::string parentPath = value.substr(0, x);
         for (size_t i = compoundStack.size(); i > 0 && !entry; i--) {
+            if (x != std::string::npos) parent = compoundStack[i - 1]->getByPath(parentPath);
+            else parent = compoundStack[i - 1];
             entry = compoundStack[i - 1]->getByPath(value);
+        }
+        if (pParent && parent) {
+            *pParent = parent->clone();
         }
         if (!entry) {
             return nullptr;
@@ -740,8 +870,8 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i) {
         return nullptr;
     }
     switch (tokens[i].type) {
-        case Token::ListStart: return parseList(tokens, i);
-        case Token::CompoundStart: return parseCompound(tokens, i);
+        case Token::ListStart: return parseList(tokens, i, compoundStack);
+        case Token::CompoundStart: return parseCompound(tokens, i, compoundStack);
         case Token::String: {
             StringEntry* entry = new StringEntry();
             entry->setValue(tokens[i].value);
@@ -768,7 +898,8 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i) {
                 if (path.empty()) {
                     return nullptr;
                 }
-                ConfigEntry* entry = byPath(path);
+                ConfigEntry* parent = nullptr;
+                ConfigEntry* entry = byPath(path, &parent);
                 if (!entry) {
                     LYNX_ERR << "Failed to find entry by path '" << path << "'" << std::endl;
                     return nullptr;
@@ -777,36 +908,48 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i) {
                     FunctionEntry* func = (FunctionEntry*) entry;
                     int tmp = 0;
                     CompoundEntry* args = new CompoundEntry();
-                    i++;
-                    for (size_t n = 0; n < func->args.size(); n++) {
-                        ConfigEntry* arg = parseValue(tokens, i);
+                    if (!parent) {
+                        LYNX_ERR << "Unable to find parent of '" << path << "'" << std::endl;
+                        return nullptr;
+                    }
+                    bool isMethod = func->isDotCallable && func->args.size() != 0;
+                    if (isMethod) {
+                        std::stringstream sink;
+                        if (!func->args.front().type->validate(parent, {}, sink)) {
+                            isMethod = false;
+                        } else {
+                            parent->setKey(func->args.front().key);
+                            args->add(parent);
+                        }
+                    }
+                    for (size_t n = (size_t) isMethod; n < func->args.size(); n++) {
+                        i++;
+                        ConfigEntry* arg = parseValue(tokens, i, compoundStack);
                         if (!arg) {
-                            LYNX_ERR << "Failed to parse argument" << std::endl;
+                            LYNX_ERR << "Failed to parse argument '" << func->args[n].key << "'" << std::endl;
                             return nullptr;
                         }
-                        if (!checkTypes(arg, func->args[n].type, {})) {
+                        if (!func->args[n].type->validate(arg, {})) {
                             LYNX_ERR << "Invalid argument type" << std::endl;
                             return nullptr;
                         }
                         arg->setKey(func->args[n].key);
                         args->add(arg);
-                        i++;
                     }
-                    i--;
-                    this->compoundStack.push_back(args);
+                    auto stack = func->compoundStack;
+                    stack.push_back(args);
                     int x = 0;
-                    ConfigEntry* result = this->parseValue(func->body, x);
-                    this->compoundStack.pop_back();
+                    ConfigEntry* result = this->parseValue(func->body, x, stack);
                     return result;
                 }
                 return entry;
             }
-            ConfigEntry* entry = x->second(tokens, i, this);
+            ConfigEntry* entry = x->second(tokens, i, this, compoundStack);
             return entry;
         }
         case Token::BlockStart: {
             i++;
-            ConfigEntry* finalEntry = parseValue(tokens, i);
+            ConfigEntry* finalEntry = parseValue(tokens, i, compoundStack);
             if (!finalEntry) {
                 LYNX_ERR << "Failed to parse value" << std::endl;
                 return nullptr;
@@ -815,7 +958,7 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i) {
 
             bool add(ConfigEntry* finalEntry, ConfigEntry* entry);
             while (i < tokens.size() && tokens[i].type != Token::BlockEnd) {
-                ConfigEntry* entry = parseValue(tokens, i);
+                ConfigEntry* entry = parseValue(tokens, i, compoundStack);
                 i++;
                 if (!entry) {
                     LYNX_ERR << "Failed to parse value" << std::endl;
@@ -836,6 +979,10 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i) {
                     } else if (entry->getType() == EntryType::Number && finalEntry->getType() == EntryType::String) {
                         double value = ((NumberEntry*) entry)->getValue();
                         ((StringEntry*) finalEntry)->setValue(((StringEntry*) finalEntry)->getValue() + std::to_string(value));
+                    } else if (finalEntry->getType() == EntryType::Number && entry->getType() == EntryType::String) {
+                        std::string value = std::to_string(((NumberEntry*) finalEntry)->getValue());
+                        finalEntry = new StringEntry();
+                        ((StringEntry*) finalEntry)->setValue(value + ((StringEntry*) entry)->getValue());
                     } else {
                         LYNX_ERR << "Invalid entry type. Expected " << finalEntry->getType() << " but got " << entry->getType() << std::endl;
                         return nullptr;
@@ -855,8 +1002,8 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i) {
     }
 }
 
-Type* ConfigParser::parseType(std::vector<Token>& tokens, int& i) {
-    auto byPath = [&i, this](std::string value) -> ConfigEntry* {
+Type* ConfigParser::parseType(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack) {
+    auto byPath = [&i, &compoundStack](std::string value) -> ConfigEntry* {
         ConfigEntry* entry = nullptr;
         for (size_t i = compoundStack.size(); i > 0 && !entry; i--) {
             entry = compoundStack[i - 1]->getByPath(value);
@@ -899,7 +1046,7 @@ Type* ConfigParser::parseType(std::vector<Token>& tokens, int& i) {
         }
         i++;
         t->type = EntryType::List;
-        t->listType = parseType(tokens, i);
+        t->listType = parseType(tokens, i, compoundStack);
         if (!t->listType) {
             LYNX_ERR << "Failed to parse list type" << std::endl;
             return nullptr;
@@ -912,7 +1059,7 @@ Type* ConfigParser::parseType(std::vector<Token>& tokens, int& i) {
             return nullptr;
         }
         t->type = EntryType::Compound;
-        t->compoundTypes = parseCompoundTypes(tokens, i);
+        t->compoundTypes = parseCompoundTypes(tokens, i, compoundStack);
     } else if (tokens[i].value == "func") {
         i++;
         if (i >= tokens.size() || tokens[i].type != Token::BlockStart) {
@@ -924,11 +1071,10 @@ Type* ConfigParser::parseType(std::vector<Token>& tokens, int& i) {
         t->compoundTypes = new std::vector<Type::CompoundType>();
         if (i < tokens.size() && tokens[i].type != Token::BlockEnd) {
             int blockDepth = 1;
-            while (i < tokens.size() && blockDepth > 0) {
-                if (tokens[i].type == Token::BlockStart) {
-                    blockDepth++;
-                } else if (tokens[i].type == Token::BlockEnd) {
-                    blockDepth--;
+            while (i < tokens.size() && tokens[i].type != Token::BlockEnd) {
+                if (tokens[i].type != Token::Identifier) {
+                    LYNX_ERR << "Expected Identifier but got " << tokens[i].value << std::endl;
+                    return nullptr;
                 }
                 std::string key = tokens[i].value;
                 i++;
@@ -937,60 +1083,35 @@ Type* ConfigParser::parseType(std::vector<Token>& tokens, int& i) {
                     return nullptr;
                 }
                 i++;
-                Type* t = parseType(tokens, i);
+                Type* t = parseType(tokens, i, compoundStack);
                 t->compoundTypes->push_back({key, t});
+                i++;
             }
-            i--;
         }
     } else {
         std::string path = makePath(tokens, i);
         ConfigEntry* typeEntry = byPath(path);
         if (!typeEntry) {
-            LYNX_ERR << "Invalid type: " << tokens[i].value << std::endl;
+            LYNX_ERR << "Failed to find entry by path '" << path << "'" << std::endl;
             return nullptr;
         }
-        // TODO: TypeEntry
+        if (typeEntry->getType() != EntryType::Type) {
+            LYNX_ERR << "Invalid entry type. Expected Type but got " << typeEntry->getType() << std::endl;
+            return nullptr;
+        }
+        TypeEntry* entry = (TypeEntry*) typeEntry;
+        t = entry->type;
     }
     return t;
 }
 
 ConfigEntry* typeToEntry(Type* type) {
-    switch (type->type) {
-        case EntryType::String: {
-            StringEntry* entry = new StringEntry();
-            entry->setValue("");
-            return entry;
-        }
-        case EntryType::Number: {
-            NumberEntry* entry = new NumberEntry();
-            entry->setValue(0);
-            return entry;
-        }
-        case EntryType::List: {
-            ListEntry* entry = new ListEntry();
-            ConfigEntry* e = typeToEntry(type->listType);
-            std::cout << "List type: " << e->getType() << std::endl;
-            entry->setListType(e->getType());
-            entry->add(e);
-            return entry;
-        }
-        case EntryType::Compound: {
-            CompoundEntry* entry = new CompoundEntry();
-            for (auto& x : *type->compoundTypes) {
-                ConfigEntry* e = typeToEntry(x.type);
-                e->setKey(x.key);
-                entry->add(e);
-            }
-            return entry;
-        }
-        default:
-            LYNX_RT_ERR << "Invalid type" << std::endl;
-            return nullptr;
-    }
-    return nullptr;
+    TypeEntry* typeEntry = new TypeEntry();
+    typeEntry->type = type;
+    return typeEntry;
 }
 
-std::vector<Type::CompoundType>* ConfigParser::parseCompoundTypes(std::vector<Token>& tokens, int& i) {
+std::vector<Type::CompoundType>* ConfigParser::parseCompoundTypes(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack) {
     std::vector<Type::CompoundType>* compound = new std::vector<Type::CompoundType>();
     if (i >= tokens.size() || tokens[i].type != Token::CompoundStart) {
         LYNX_ERR << "Invalid compound" << std::endl;
@@ -1013,7 +1134,7 @@ std::vector<Type::CompoundType>* ConfigParser::parseCompoundTypes(std::vector<To
         }
         i++;
         
-        Type* type = parseType(tokens, i);
+        Type* type = parseType(tokens, i, compoundStack);
         if (!type) {
             LYNX_ERR << "Failed to parse type for key '" << key << "'" << std::endl;
             compoundStack.pop_back();
@@ -1026,10 +1147,11 @@ std::vector<Type::CompoundType>* ConfigParser::parseCompoundTypes(std::vector<To
         compound->push_back(t);
         i++;
     }
+    // i--;
     return compound;
 }
 
-CompoundEntry* ConfigParser::parseCompound(std::vector<Token>& tokens, int& i) {
+CompoundEntry* ConfigParser::parseCompound(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack) {
     CompoundEntry* compound = new CompoundEntry();
     compoundStack.push_back(compound);
     if (i >= tokens.size() || tokens[i].type != Token::CompoundStart) {
@@ -1039,6 +1161,23 @@ CompoundEntry* ConfigParser::parseCompound(std::vector<Token>& tokens, int& i) {
     }
     i++;
     while (i < tokens.size() && tokens[i].type != Token::CompoundEnd) {
+        if (tokens[i].type == Token::Assign) {
+            i++;
+            ConfigEntry* entry = parseValue(tokens, i, compoundStack);
+            if (!entry) {
+                LYNX_ERR << "Failed to parse value for merge" << std::endl;
+                compoundStack.pop_back();
+                return nullptr;
+            }
+            if (entry->getType() != EntryType::Compound) {
+                LYNX_ERR << "Expected Compound for merge but got " << entry->getType() << std::endl;
+                compoundStack.pop_back();
+                return nullptr;
+            }
+            compound->merge((CompoundEntry*) entry);
+            i++;
+            continue;
+        }
         if (tokens[i].type != Token::Identifier) {
             LYNX_ERR << "Invalid key: " << tokens[i].value << std::endl;
             compoundStack.pop_back();
@@ -1046,9 +1185,9 @@ CompoundEntry* ConfigParser::parseCompound(std::vector<Token>& tokens, int& i) {
         }
         std::string key = tokens[i].value;
         i++;
-        if (i < tokens.size() || tokens[i].type == Token::Is) {
+        if (i < tokens.size() && tokens[i].type == Token::Is) {
             i++;
-            Type* type = parseType(tokens, i);
+            Type* type = parseType(tokens, i, compoundStack);
             if (!type) {
                 LYNX_ERR << "Failed to parse type for key '" << key << "'" << std::endl;
                 compoundStack.pop_back();
@@ -1068,7 +1207,7 @@ CompoundEntry* ConfigParser::parseCompound(std::vector<Token>& tokens, int& i) {
         }
         i++;
         
-        ConfigEntry* entry = parseValue(tokens, i);
+        ConfigEntry* entry = parseValue(tokens, i, compoundStack);
         if (!entry) {
             LYNX_ERR << "Failed to parse value for key '" << key << "'" << std::endl;
             compoundStack.pop_back();
