@@ -40,36 +40,6 @@ Person = compound {
 }
 ```
 
-### Functions
-A function is a special kind of value that can be called with arguments:
-```
-square: func(x = number) (
-    mul x x
-)
-
-_: printLn (square 5) -- prints 25
-```
-
-### Pseudo-methods
-Pseudo-methods are functions that are called on a value:
-```
-Person = compound {
-    name = string
-    age = number
-}
-
-John: {
-    name: "John"
-    age: 25
-
-    greet: func Person () ( -- parent compound bound to 'self'
-        printLn ("Hello, " self.name)
-    )
-}
-
-_: John.greet
-```
-
 ### Expressions
 Expressions are a way to do some computation in the config file.
 ```

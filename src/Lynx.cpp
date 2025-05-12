@@ -1,6 +1,12 @@
 #include <iostream>
 #include <unordered_map>
 #include <cmath>
+#include <cstdio>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <array>
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -46,89 +52,20 @@ std::string makePath(std::vector<Token>& tokens, int& i) {
     return path;
 }
 
-bool add(ConfigEntry* finalEntry, ConfigEntry* entry) {
-    switch (entry->getType()) {
-        case EntryType::String:
-            ((StringEntry*) finalEntry)->setValue(((StringEntry*) finalEntry)->getValue() + ((StringEntry*) entry)->getValue());
-            break;
-        case EntryType::Number:
-            ((NumberEntry*) finalEntry)->setValue(((NumberEntry*) finalEntry)->getValue() + ((NumberEntry*) entry)->getValue());
-            break;
-        case EntryType::List:
-            ((ListEntry*) finalEntry)->merge((ListEntry*) entry);
-            break;
-        case EntryType::Compound:
-            ((CompoundEntry*) finalEntry)->merge((CompoundEntry*) entry);
-            break;
-        default:
-            LYNX_RT_ERR << "Invalid entry type" << std::endl;
-            return false;
+std::string exec(const char* cmd) {
+    std::array<char, 128> buffer;
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("popen() failed!");
     }
-    return true;
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) != nullptr) {
+        result += buffer.data();
+    }
+    return result;
 }
 
 std::unordered_map<std::string, Command> commands {
-    std::pair("func", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        FunctionEntry* entry = new FunctionEntry();
-        i++;
-        if (i >= tokens.size()) {
-            LYNX_ERR << "Expected block start or type but got " << tokens[i].value << std::endl;
-            return nullptr;
-        }
-        if (tokens[i].type != Token::BlockStart) {
-            Type* t = parser->parseType(tokens, i, compoundStack);
-            if (!t) {
-                LYNX_ERR << "Failed to parse type" << std::endl;
-                return nullptr;
-            }
-            entry->args.push_back({"self", t});
-            entry->isDotCallable = true;
-            i++;
-        }
-        i++;
-        while (i < tokens.size() && tokens[i].type != Token::BlockEnd) {
-            if (tokens[i].type != Token::Identifier) {
-                LYNX_ERR << "Expected Identifier but got " << tokens[i].value << std::endl;
-                return nullptr;
-            }
-            std::string name = tokens[i].value;
-            i++;
-            if (i >= tokens.size() || tokens[i].type != Token::Is) {
-                LYNX_ERR << "Expected '=' but got " << tokens[i].value << std::endl;
-                return nullptr;
-            }
-            i++;
-            Type* type = parser->parseType(tokens, i, compoundStack);
-            if (!type) {
-                LYNX_ERR << "Failed to parse type for argument '" << name << "'" << std::endl;
-                return nullptr;
-            }
-            entry->args.push_back({name, type});
-            i++;
-        }
-        i++;
-        if (i >= tokens.size() || tokens[i].type != Token::BlockStart) {
-            LYNX_ERR << "Expected block start but got " << tokens[i].value << std::endl;
-            return nullptr;
-        }
-        std::vector<Token> body;
-        body.push_back(tokens[i]);
-        i++;
-        int blockDepth = 1;
-        while (i < tokens.size() && blockDepth > 0) {
-            if (tokens[i].type == Token::BlockStart) {
-                blockDepth++;
-            } else if (tokens[i].type == Token::BlockEnd) {
-                blockDepth--;
-            }
-            body.push_back(tokens[i]);
-            i++;
-        }
-        i--;
-        entry->body = body;
-        entry->compoundStack = compoundStack;
-        return entry;
-    }),
     std::pair("true", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         NumberEntry* entry = new NumberEntry();
         entry->setValue(1);
@@ -151,23 +88,8 @@ std::unordered_map<std::string, Command> commands {
             return nullptr;
         }
         std::string command = ((StringEntry*) result)->getValue();
-        std::string output = "";
-        FILE* fp = popen(command.c_str(), "r");
-        if (!fp) {
-            LYNX_ERR << "Failed to run shell command" << std::endl;
-            return nullptr;
-        }
-        char buf[1024];
-        while (fgets(buf, 1024, fp)) {
-            output += buf;
-        }
-        int res = pclose(fp);
-        if (res != 0) {
-            LYNX_ERR << "Failed to run shell command" << std::endl;
-            return nullptr;
-        }
         StringEntry* entry = new StringEntry();
-        entry->setValue(output);
+        entry->setValue(exec(command.c_str()));
         return entry;
     }),
     std::pair("print", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
@@ -179,13 +101,7 @@ std::unordered_map<std::string, Command> commands {
         }
         switch (result->getType()) {
             case EntryType::String: std::cout << ((StringEntry*) result)->getValue(); break;
-            case EntryType::Number:
-                try {
-                    std::cout << std::to_string(((NumberEntry*) result)->getValue());
-                } catch(const std::out_of_range& e) {
-                    std::cerr << "Number is too large to print" << std::endl;
-                }
-                break;
+            case EntryType::Number: std::cout << ((NumberEntry*) result)->getValue(); break;
             case EntryType::List: result->print(std::cout); break;
             case EntryType::Compound: result->print(std::cout); break;
             default:
@@ -222,13 +138,7 @@ std::unordered_map<std::string, Command> commands {
         }
         switch (result->getType()) {
             case EntryType::String: std::cout << ((StringEntry*) result)->getValue() << std::endl; break;
-            case EntryType::Number:
-                try {
-                    std::cout << std::to_string(((NumberEntry*) result)->getValue()) << std::endl;
-                } catch(const std::out_of_range& e) {
-                    std::cerr << "Number is too large to print" << std::endl;
-                }
-                break;
+            case EntryType::Number: std::cout << ((NumberEntry*) result)->getValue() << std::endl; break;
             case EntryType::List: result->print(std::cout); break;
             case EntryType::Compound: result->print(std::cout); break;
             default:
@@ -302,6 +212,7 @@ std::unordered_map<std::string, Command> commands {
         ConfigEntry* result = nullptr;
         for (size_t i = 0; i < list->size(); i++) {
             auto value = list->get(i);
+            std::string oldKey = value->getKey();
             value->setKey(iterVar);
             compound = new CompoundEntry();
             compoundStack.push_back(compound);
@@ -310,6 +221,7 @@ std::unordered_map<std::string, Command> commands {
             ConfigEntry* next = parser->parseValue(forBody, newI, compoundStack);
             if (!next) {
                 LYNX_ERR << "Failed to parse for loop block" << std::endl;
+                value->setKey(oldKey);
                 return nullptr;
             }
             compoundStack.pop_back();
@@ -317,12 +229,16 @@ std::unordered_map<std::string, Command> commands {
                 result = next;
             } else if (next->getType() != result->getType()) {
                 LYNX_ERR << "Invalid entry type in for loop block. Expected " << result->getType() << " but got " << next->getType() << std::endl;
+                value->setKey(oldKey);
                 return nullptr;
             } else {
-                if (!add(result, next)) {
+                bool sumEntries(ConfigEntry* a, ConfigEntry* b);
+                if (!sumEntries(result, next)) {
+                    value->setKey(oldKey);
                     return nullptr;
                 }
             }
+            value->setKey(oldKey);
         }
         if (!result) {
             return new StringEntry();
@@ -843,7 +759,29 @@ int main(int argc, char const *argv[]) {
     }
     for (int i = 1; i < argc; i++) {
         std::string file = argv[i];
-        ConfigParser().parse(file);
+        auto parsed = ConfigParser(commands).parse(file);
+        if (!parsed) {
+            std::cerr << "Failed to parse file: " << file << std::endl;
+            return 1;
+        }
+        i++;
+        if (i < argc) {
+            // parse path
+            std::string path = argv[i];
+            if (parsed->getType() != EntryType::Compound) {
+                std::cerr << "Invalid entry type. Expected Compound but got " << parsed->getType() << std::endl;
+                return 1;
+            }
+            auto entry = static_cast<CompoundEntry*>(parsed)->getByPath(path);
+            if (!entry) {
+                std::cerr << "Failed to find entry: " << path << std::endl;
+                return 1;
+            }
+            entry->print(std::cout);
+        } else {
+            i--;
+            parsed->print(std::cout);
+        }
     }
     return 0;
 }

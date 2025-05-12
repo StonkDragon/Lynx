@@ -24,7 +24,6 @@ enum class EntryType {
     Number,
     List,
     Compound,
-    Function,
     Type
 };
 
@@ -460,24 +459,12 @@ struct Type {
     EntryType type;
     Type* listType;
     std::vector<CompoundType>* compoundTypes;
+    bool isOptional = false;
 
     bool validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out = std::cout);
     Type* clone();
     bool operator==(const Type& other) const;
     bool operator!=(const Type& other) const;
-};
-
-struct FunctionEntry : public ConfigEntry {
-    std::vector<Type::CompoundType> args;
-    std::vector<Token> body;
-    std::vector<CompoundEntry*> compoundStack;
-    bool isDotCallable;
-
-    FunctionEntry();
-    bool operator==(const ConfigEntry& other) override;
-    bool operator!=(const ConfigEntry& other) override;
-    void print(std::ostream& stream, int indent = 0) override;
-    ConfigEntry* clone() override;
 };
 
 struct TypeEntry : public ConfigEntry {
@@ -491,7 +478,15 @@ struct TypeEntry : public ConfigEntry {
     ConfigEntry* clone() override;
 };
 
+struct ConfigParser;
+
+using Command = std::function<ConfigEntry*(std::vector<Token>&, int&, ConfigParser*, std::vector<CompoundEntry*>&)>;
+
 struct ConfigParser {
+    std::unordered_map<std::string, Command> commands;
+
+    ConfigParser(std::unordered_map<std::string, Command> commands) : commands(commands) {}
+
     /**
      * Parses the specified configuration file.
      * @param configFile The path to the configuration file.
@@ -505,5 +500,3 @@ struct ConfigParser {
     ListEntry* parseList(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
     ConfigEntry* parseValue(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
 };
-
-using Command = std::function<ConfigEntry*(std::vector<Token>&, int&, ConfigParser*, std::vector<CompoundEntry*>&)>;

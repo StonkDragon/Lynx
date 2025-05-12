@@ -1,23 +1,18 @@
-validation: validate clang (optional) compound {
-    output = string
-    warnings = list[string]
-    pedantic = number
-    std = string
-    optimize = string
-    debug = number
-    include = list[string]
-    define = list[string]
-    link = list[string]
-    flags = list[string]
-    lib = list[string]
-    libpath = list[string]
-    files = list[string]
+clang = compound {
+    output = optional string
+    warnings = optional list[string]
+    pedantic = optional number
+    std = optional string
+    optimize = optional string
+    debug = optional number
+    include = optional list[string]
+    define = optional list[string]
+    link = optional list[string]
+    flags = optional list[string]
+    lib = optional list[string]
+    libpath = optional list[string]
+    files = optional list[string]
 }
-
-_: if not validation (
-    printLn "Invalid commands"
-    exit 0
-)
 
 command: (
     "clang++"

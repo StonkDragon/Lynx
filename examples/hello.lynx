@@ -1,1 +1,1 @@
-hello: printLn "Hello, World!"
+hello: "Hello, World!"

@@ -1,14 +1,15 @@
-clang: {
-    files: [
-        "src/Lynx.cpp"
-        "src/LynxConf.cpp"
-    ]
-    include: [
-        "src"
-    ]
-    std: "gnu++20"
-    output: "build/lynx-self"
-    optimize: "3"
+:use "examples/Person.lynx"
+
+p1 = Person.Person
+p1: {
+    first-name: "John"
+    last-name: "Doe"
+    combined: (first-name " " last-name)
 }
 
-comp: use "examples/clang++.lynx"
+p2 = Person.Person
+p2: {
+    first-name: "Jane"
+    last-name: "Smith"
+    combined: (first-name " " last-name)
+}

@@ -1,0 +1,14 @@
+clang: {
+    files: [
+        "src/Lynx.cpp"
+        "src/LynxConf.cpp"
+    ]
+    include: [
+        "src"
+    ]
+    std: "gnu++20"
+    output: "build/lynx-self"
+    optimize: "3"
+}
+
+result: use "examples/clang++.lynx"
