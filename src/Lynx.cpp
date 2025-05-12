@@ -2,6 +2,15 @@
 #include <unordered_map>
 #include <cmath>
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <shellapi.h>
+
+#define popen _popen
+#define pclose _pclose
+#endif
+
 #include <LynxConf.hpp>
 #include <Lynx.hpp>
 
@@ -152,7 +161,11 @@ std::unordered_map<std::string, Command> commands {
         while (fgets(buf, 1024, fp)) {
             output += buf;
         }
-        pclose(fp);
+        int res = pclose(fp);
+        if (res != 0) {
+            LYNX_ERR << "Failed to run shell command" << std::endl;
+            return nullptr;
+        }
         StringEntry* entry = new StringEntry();
         entry->setValue(output);
         return entry;
