@@ -595,6 +595,11 @@ std::vector<Token> tokenize(std::string file, std::string& data, int& i) {
 }
 
 CompoundEntry* ConfigParser::parse(const std::string& configFile) {
+    std::vector<CompoundEntry*> compoundStack;
+    return this->parse(configFile, compoundStack);
+}
+
+CompoundEntry* ConfigParser::parse(const std::string& configFile, std::vector<CompoundEntry*>& compoundStack) {
     FILE* fp = fopen(configFile.c_str(), "r");
     if (!fp) {
         return nullptr;
@@ -630,7 +635,6 @@ CompoundEntry* ConfigParser::parse(const std::string& configFile) {
         return nullptr;
     }
     i = 0;
-    std::vector<CompoundEntry*> compoundStack;
     CompoundEntry* rootEntry = parseCompound(tokens, i, compoundStack);
     if (!rootEntry) {
         LYNX_ERR << "Failed to parse compound" << std::endl;

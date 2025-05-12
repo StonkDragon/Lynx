@@ -193,7 +193,7 @@ std::unordered_map<std::string, Command> commands {
             return nullptr;
         }
         std::string file = ((StringEntry*) result)->getValue();
-        CompoundEntry* entry = parser->parse(file);
+        CompoundEntry* entry = parser->parse(file, compoundStack);
         if (!entry) {
             LYNX_ERR << "Failed to parse file '" << file << "'" << std::endl;
             return nullptr;
@@ -484,16 +484,11 @@ std::unordered_map<std::string, Command> commands {
             }
             i++;
         }
-        ConfigEntry* typeEntry = parser->parseValue(tokens, i, compoundStack);
-        if (!typeEntry) {
+        Type* type = parser->parseType(tokens, i, compoundStack);
+        if (!type) {
             LYNX_ERR << "Failed to parse type" << std::endl;
             return nullptr;
         }
-        if (typeEntry->getType() != EntryType::Type) {
-            LYNX_ERR << "Invalid entry type in validate block. Expected Type but got " << typeEntry->getType() << std::endl;
-            return nullptr;
-        }
-        Type* type = ((TypeEntry*) typeEntry)->type;
         NumberEntry* result = new NumberEntry();
         result->setValue(type->validate(entry, flags) == true);
         return result;

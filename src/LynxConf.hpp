@@ -498,7 +498,7 @@ struct ConfigParser {
      * @return The root entry of the configuration file.
      */
     CompoundEntry* parse(const std::string& configFile);
-    
+    CompoundEntry* parse(const std::string& configFile, std::vector<CompoundEntry*>& compoundStack);
     Type* parseType(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
     std::vector<Type::CompoundType>* parseCompoundTypes(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
     CompoundEntry* parseCompound(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);

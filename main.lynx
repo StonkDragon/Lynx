@@ -1,15 +1,14 @@
-Person = compound {
-    name = string
-    age = number
+clang: {
+    files: [
+        "src/Lynx.cpp"
+        "src/LynxConf.cpp"
+    ]
+    include: [
+        "src"
+    ]
+    std: "gnu++20"
+    output: "build/lynx-self"
+    optimize: "3"
 }
 
-John: {
-    name: "John"
-    age: 25
-
-    greet: func Person () (
-        printLn ("Hello, " self.name)
-    )
-}
-
-_: John.greet
+comp: use "examples/clang++.lynx"
