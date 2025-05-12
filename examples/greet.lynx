@@ -1,4 +1,4 @@
-_: print "What is your name? "
-name: readLn
-name: if string-length name name else "World"
-_: printLn ("Hello, " name "!")
+(print "What is your name? ")
+name = readLn
+name = if string-length name name else "World"
+(printLn ("Hello, " name "!"))

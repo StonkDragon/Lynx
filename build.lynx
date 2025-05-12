@@ -1,14 +1,19 @@
-clang: {
-    files: [
-        "src/Lynx.cpp"
+-- Lynx is capable of building itself:
+-- $ lynx build.lynx
+
+(use "examples/clang++.lynx")
+
+clang: ClangArgs = {
+    files = [
+        "src/tool/Lynx.cpp"
         "src/LynxConf.cpp"
     ]
-    include: [
-        "src"
+    include = [
+        "include"
     ]
-    std: "gnu++20"
-    output: "build/lynx-self"
-    optimize: "3"
+    std = "gnu++20"
+    output = "build/lynx"
+    optimize = "3"
 }
 
-result: use "examples/clang++.lynx"
+(compile clang)

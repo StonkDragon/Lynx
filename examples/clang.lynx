@@ -1,34 +1,34 @@
-clang = compound {
-    output = optional string
-    warnings = optional list[string]
-    pedantic = optional number
-    std = optional string
-    optimize = optional string
-    debug = optional number
-    include = optional list[string]
-    define = optional list[string]
-    link = optional list[string]
-    flags = optional list[string]
-    lib = optional list[string]
-    libpath = optional list[string]
-    files = optional list[string]
+ClangArgs: compound {
+    output: optional string
+    warnings: optional list[string]
+    pedantic: optional number
+    std: optional string
+    optimize: optional string
+    debug: optional number
+    include: optional list[string]
+    define: optional list[string]
+    link: optional list[string]
+    flags: optional list[string]
+    lib: optional list[string]
+    libpath: optional list[string]
+    files: optional list[string]
 }
 
-command: (
-    "clang"
-    if exists clang.output   (" -o " clang.output)
-    if exists clang.std      (" -std=" clang.std)
-    if exists clang.optimize (" -O" clang.optimize)
-    if exists clang.debug    (if clang.debug (" -g"))
-    if exists clang.pedantic (if clang.pedantic (" -pedantic"))
-    if exists clang.include  (for i in clang.include (" -I" i))
-    if exists clang.define   (for d in clang.define (" -D" d))
-    if exists clang.flags    (for f in clang.flags (" " f))
-    if exists clang.lib      (for l in clang.lib (" -l" l))
-    if exists clang.libpath  (for p in clang.libpath (" -L" p))
-    if exists clang.link     (for l in clang.link (" " l))
-    if exists clang.warnings (for w in clang.warnings (" -W" w))
-    if exists clang.files    (for f in clang.files (" " f))
+compile = func(what: ClangArgs) (
+    runshell (
+        "clang"
+        if exists what.output   (" -o " what.output)
+        if exists what.std      (" -std=" what.std)
+        if exists what.optimize (" -O" what.optimize)
+        if exists what.debug    (if what.debug (" -g"))
+        if exists what.pedantic (if what.pedantic (" -pedantic"))
+        if exists what.include  (for i in what.include (" -I" i))
+        if exists what.define   (for d in what.define (" -D" d))
+        if exists what.flags    (for f in what.flags (" " f))
+        if exists what.lib      (for l in what.lib (" -l" l))
+        if exists what.libpath  (for p in what.libpath (" -L" p))
+        if exists what.link     (for l in what.link (" " l))
+        if exists what.warnings (for w in what.warnings (" -W" w))
+        if exists what.files    (for f in what.files (" " f))
+    )
 )
-
-output: runshell command

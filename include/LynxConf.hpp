@@ -10,10 +10,10 @@ typedef unsigned long u_long;
 #endif
 
 #define LYNX_LOG LYNX_LOG_TO(std::cout)
-#define LYNX_LOG_TO(_sink) _sink << "[Lynx Config] " << tokens[i].file << ":" << tokens[i].line << ":" << tokens[i].column << ": "
+#define LYNX_LOG_TO(_sink) _sink << "[Lynx Config] " << tokens[i].file << ":" << tokens[i].line << ":" << (tokens[i].column + 1) << ": "
 
 #define LYNX_ERR LYNX_ERR_TO(std::cerr)
-#define LYNX_ERR_TO(_sink) _sink << "[Lynx Config] " << tokens[i].file << ":" << tokens[i].line << ":" << tokens[i].column << ": "
+#define LYNX_ERR_TO(_sink) _sink << "[Lynx Config] " << tokens[i].file << ":" << tokens[i].line << ":" << (tokens[i].column + 1) << ": "
 
 #define LYNX_RT_ERR LYNX_RT_ERR_TO(std::cerr)
 #define LYNX_RT_ERR_TO(_sink) _sink << "[Lynx Config] "
@@ -24,7 +24,8 @@ enum class EntryType {
     Number,
     List,
     Compound,
-    Type
+    Type,
+    Function
 };
 
 std::ostream& operator<<(std::ostream& out, EntryType type);
@@ -435,8 +436,8 @@ struct Token {
         BlockEnd,       // )
         Identifier,     // identifier
         Dot,            // .
-        Assign,         // :
-        Is,             // =
+        Is,             // :
+        Assign,         // =
     } type;
     std::string value;
     std::string file;
@@ -465,6 +466,20 @@ struct Type {
     Type* clone();
     bool operator==(const Type& other) const;
     bool operator!=(const Type& other) const;
+    std::string toString() const;
+};
+
+struct FunctionEntry : public ConfigEntry {
+    std::vector<Type::CompoundType> args;
+    std::vector<Token> body;
+    std::vector<CompoundEntry*> compoundStack;
+    bool isDotCallable;
+
+    FunctionEntry();
+    bool operator==(const ConfigEntry& other) override;
+    bool operator!=(const ConfigEntry& other) override;
+    void print(std::ostream& stream, int indent = 0) override;
+    ConfigEntry* clone() override;
 };
 
 struct TypeEntry : public ConfigEntry {
@@ -482,11 +497,8 @@ struct ConfigParser;
 
 using Command = std::function<ConfigEntry*(std::vector<Token>&, int&, ConfigParser*, std::vector<CompoundEntry*>&)>;
 
+
 struct ConfigParser {
-    std::unordered_map<std::string, Command> commands;
-
-    ConfigParser(std::unordered_map<std::string, Command> commands) : commands(commands) {}
-
     /**
      * Parses the specified configuration file.
      * @param configFile The path to the configuration file.

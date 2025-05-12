@@ -1,0 +1,7 @@
+-- Function definition
+printTwice = func(s: string) (
+    printLn s
+    printLn s
+)
+
+(printTwice "Hello")
