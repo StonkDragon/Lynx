@@ -18,6 +18,11 @@
 #include <stdexcept>
 #include <string>
 #include <array>
+#include <filesystem>
+#include <vector>
+#include <utility>
+#include <functional>
+#include <fstream>
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -793,6 +798,233 @@ std::unordered_map<std::string, Command> commands {
         }
         NumberEntry* number = (NumberEntry*) entry;
         std::exit(number->getValue());
+    }),
+    std::pair("file-mkdir", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse file-mkdir block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in file-mkdir block. Expected String but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        StringEntry* str = (StringEntry*) entry;
+        if (std::filesystem::create_directories(str->getValue())) {
+            LYNX_ERR << "Failed to create directory: " << str->getValue() << std::endl;
+            return nullptr;
+        }
+        return new StringEntry();
+    }),
+    std::pair("file-rmdir", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse file-rmdir block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in file-rmdir block. Expected String but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        StringEntry* str = (StringEntry*) entry;
+        if (std::filesystem::remove_all(str->getValue())) {
+            LYNX_ERR << "Failed to remove directory: " << str->getValue() << std::endl;
+            return nullptr;
+        }
+        return new StringEntry();
+    }),
+    std::pair("file-rm", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse file-rm block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in file-rm block. Expected String but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        StringEntry* str = (StringEntry*) entry;
+        if (std::filesystem::remove(str->getValue())) {
+            LYNX_ERR << "Failed to remove file: " << str->getValue() << std::endl;
+            return nullptr;
+        }
+        return new StringEntry();
+    }),
+    std::pair("file-write", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse file-write block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in file-write block. Expected String but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        ConfigEntry* entry2 = parser->parseValue(tokens, i, compoundStack);
+        if (!entry2) {
+            LYNX_ERR << "Failed to parse file-write block" << std::endl;
+            return nullptr;
+        }
+        if (entry2->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in file-write block. Expected String but got " << entry2->getType() << std::endl;
+            return nullptr;
+        }
+        StringEntry* filename = (StringEntry*) entry;
+        StringEntry* content = (StringEntry*) entry2;
+        std::ofstream file(filename->getValue());
+        if (!file.is_open()) {
+            LYNX_ERR << "Failed to open file: " << filename->getValue() << std::endl;
+            return nullptr;
+        }
+        file << content->getValue();
+        if (file.fail()) {
+            LYNX_ERR << "Failed to write to file: " << filename->getValue() << std::endl;
+            return nullptr;
+        }
+        file.close();
+        return new StringEntry();
+    }),
+    std::pair("file-read", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse file-read block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in file-read block. Expected String but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        StringEntry* filename = (StringEntry*) entry;
+        std::ifstream file(filename->getValue());
+        if (!file.is_open()) {
+            LYNX_ERR << "Failed to open file: " << filename->getValue() << std::endl;
+            return nullptr;
+        }
+        std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        if (file.fail()) {
+            LYNX_ERR << "Failed to read from file: " << filename->getValue() << std::endl;
+            return nullptr;
+        }
+        file.close();
+        StringEntry* result = new StringEntry();
+        result->setValue(content);
+        return result;
+    }),
+    std::pair("file-exists", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse file-exists block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in file-exists block. Expected String but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        StringEntry* filename = (StringEntry*) entry;
+        NumberEntry* result = new NumberEntry();
+        result->setValue(std::filesystem::exists(filename->getValue()) ? 1 : 0);
+        return result;
+    }),
+    std::pair("file-isdir", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse file-isdir block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in file-isdir block. Expected String but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        StringEntry* filename = (StringEntry*) entry;
+        NumberEntry* result = new NumberEntry();
+        result->setValue(std::filesystem::is_directory(filename->getValue()) ? 1 : 0);
+        return result;
+    }),
+    std::pair("file-isfile", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse file-isfile block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in file-isfile block. Expected String but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        StringEntry* filename = (StringEntry*) entry;
+        NumberEntry* result = new NumberEntry();
+        result->setValue(std::filesystem::is_regular_file(filename->getValue()) ? 1 : 0);
+        return result;
+    }),
+    std::pair("file-dirname", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse file-dirname block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in file-dirname block. Expected String but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        StringEntry* filename = (StringEntry*) entry;
+        StringEntry* result = new StringEntry();
+        result->setValue(std::filesystem::path(filename->getValue()).parent_path().string());
+        return result;
+    }),
+    std::pair("file-basename", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse file-basename block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in file-basename block. Expected String but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        StringEntry* filename = (StringEntry*) entry;
+        StringEntry* result = new StringEntry();
+        result->setValue(std::filesystem::path(filename->getValue()).filename().string());
+        return result;
+    }),
+    std::pair("file-extname", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse file-extname block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in file-extname block. Expected String but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        StringEntry* filename = (StringEntry*) entry;
+        StringEntry* result = new StringEntry();
+        result->setValue(std::filesystem::path(filename->getValue()).extension().string());
+        return result;
+    }),
+    std::pair("error", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse error block" << std::endl;
+            return nullptr;
+        }
+        if (entry->getType() != EntryType::String) {
+            LYNX_ERR << "Invalid entry type in error block. Expected String but got " << entry->getType() << std::endl;
+            return nullptr;
+        }
+        StringEntry* str = (StringEntry*) entry;
+        LYNX_ERR << str->getValue() << std::endl;
+        return nullptr;
     }),
 };
 
