@@ -37,9 +37,9 @@
 
 using namespace std;
 
-std::unordered_map<std::string, Command> commands {
+std::unordered_map<std::string, BuiltinCommand> builtins {
     std::pair("func", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        FunctionEntry* entry = new FunctionEntry();
+        DeclaredFunctionEntry* entry = new DeclaredFunctionEntry();
         i++;
         if (i >= tokens.size()) {
             LYNX_ERR << "Expected block start but got " << tokens[i].value << std::endl;
@@ -97,95 +97,6 @@ std::unordered_map<std::string, Command> commands {
     std::pair("false", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         NumberEntry* entry = new NumberEntry();
         entry->setValue(0);
-        return entry;
-    }),
-    std::pair("runshell", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* result = parser->parseValue(tokens, i, compoundStack);
-        if (!result) {
-            LYNX_ERR << "Failed to parse runshell block" << std::endl;
-            return nullptr;
-        }
-        if (result->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in runshell block. Expected String but got " << result->getType() << std::endl;
-            return nullptr;
-        }
-        std::string command = ((StringEntry*) result)->getValue();
-        StringEntry* entry = new StringEntry();
-
-        std::array<char, 128> buffer;
-        std::string resultStr;
-        std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
-        if (!pipe) {
-            throw std::runtime_error("popen() failed!");
-        }
-        while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) != nullptr) {
-            resultStr += buffer.data();
-        }
-        entry->setValue(resultStr);
-        return entry;
-    }),
-    std::pair("print", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* result = parser->parseValue(tokens, i, compoundStack);
-        if (!result) {
-            LYNX_ERR << "Failed to parse print block" << std::endl;
-            return nullptr;
-        }
-        switch (result->getType()) {
-            case EntryType::String: std::cout << ((StringEntry*) result)->getValue(); break;
-            case EntryType::Number: std::cout << ((NumberEntry*) result)->getValue(); break;
-            case EntryType::List: result->print(std::cout); break;
-            case EntryType::Compound: result->print(std::cout); break;
-            default:
-                LYNX_ERR << "Invalid entry type in print block. Expected String or Number but got " << result->getType() << std::endl;
-                return nullptr;
-        }
-        return result;
-    }),
-    std::pair("use", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* result = parser->parseValue(tokens, i, compoundStack);
-        if (!result) {
-            LYNX_ERR << "Failed to parse use block" << std::endl;
-            return nullptr;
-        }
-        if (result->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in use block. Expected String but got " << result->getType() << std::endl;
-            return nullptr;
-        }
-        std::string file = ((StringEntry*) result)->getValue();
-        CompoundEntry* entry = parser->parse(file, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse file '" << file << "'" << std::endl;
-            return nullptr;
-        }
-        compoundStack.back()->merge(entry);
-        return entry;
-    }),
-    std::pair("printLn", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* result = parser->parseValue(tokens, i, compoundStack);
-        if (!result) {
-            LYNX_ERR << "Failed to parse printLn block" << std::endl;
-            return nullptr;
-        }
-        switch (result->getType()) {
-            case EntryType::String: std::cout << ((StringEntry*) result)->getValue() << std::endl; break;
-            case EntryType::Number: std::cout << ((NumberEntry*) result)->getValue() << std::endl; break;
-            case EntryType::List: result->print(std::cout); break;
-            case EntryType::Compound: result->print(std::cout); break;
-            default:
-                LYNX_ERR << "Invalid entry type in printLn block. Expected String or Number but got " << result->getType() << std::endl;
-                return nullptr;
-        }
-        return result;
-    }),
-    std::pair("readLn", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        std::string line;
-        std::getline(std::cin, line);
-        StringEntry* entry = new StringEntry();
-        entry->setValue(line);
         return entry;
     }),
     std::pair("for", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
@@ -277,89 +188,6 @@ std::unordered_map<std::string, Command> commands {
         if (!result) {
             return new StringEntry();
         }
-        return result;
-    }),
-    std::pair("eq", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack);
-        i++;
-        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack);
-        if (!entryA || !entryB) {
-            LYNX_ERR << "Failed to parse eq block" << std::endl;
-            return nullptr;
-        }
-        if (entryA->getType() != entryB->getType()) {
-            LYNX_ERR << "Invalid entry type in eq block. Expected " << entryA->getType() << " but got " << entryB->getType() << std::endl;
-            return nullptr;
-        }
-        NumberEntry* result = new NumberEntry();
-        result->setValue(entryA->operator==(*entryB) ? 1 : 0);
-        return result;
-    }),
-    std::pair("ne", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack);
-        i++;
-        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack);
-        if (!entryA || !entryB) {
-            LYNX_ERR << "Failed to parse ne block" << std::endl;
-            return nullptr;
-        }
-        if (entryA->getType() != entryB->getType()) {
-            LYNX_ERR << "Invalid entry type in ne block. Expected " << entryA->getType() << " but got " << entryB->getType() << std::endl;
-            return nullptr;
-        }
-        NumberEntry* result = new NumberEntry();
-        result->setValue(entryA->operator!=(*entryB) ? 1 : 0);
-        return result;
-    }),
-    std::pair("string-length", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse string-length block" << std::endl;
-            return nullptr;
-        }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in string-length block. Expected String but got " << entry->getType() << std::endl;
-            return nullptr;
-        }
-        NumberEntry* result = new NumberEntry();
-        result->setValue(((StringEntry*) entry)->getValue().length());
-        return result;
-    }),
-    std::pair("string-substring", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* str = parser->parseValue(tokens, i, compoundStack);
-        i++;
-        ConfigEntry* start = parser->parseValue(tokens, i, compoundStack);
-        i++;
-        ConfigEntry* end = parser->parseValue(tokens, i, compoundStack);
-        if (!str || !start || !end) {
-            LYNX_ERR << "Failed to parse string-substring block" << std::endl;
-            return nullptr;
-        }
-        if (str->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in string-substring block. Expected String but got " << str->getType() << std::endl;
-            return nullptr;
-        }
-        if (start->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in string-substring block. Expected Number but got " << start->getType() << std::endl;
-            return nullptr;
-        }
-        if (end->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in string-substring block. Expected Number but got " << end->getType() << std::endl;
-            return nullptr;
-        }
-        std::string value = ((StringEntry*) str)->getValue();
-        long long startValue = ((NumberEntry*) start)->getValue();
-        long long endValue = ((NumberEntry*) end)->getValue();
-        if (startValue < 0 || startValue >= value.size() || endValue < 0 || endValue >= value.size()) {
-            LYNX_ERR << "Invalid start or end value in string-substring block" << std::endl;
-            return nullptr;
-        }
-        StringEntry* result = new StringEntry();
-        result->setValue(value.substr(startValue, endValue - startValue));
         return result;
     }),
     std::pair("if", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
@@ -470,29 +298,169 @@ std::unordered_map<std::string, Command> commands {
         result->setValue(condition ? 1 : 0);
         return result;
     }),
+};
+
+void recursiveDelete(std::string path) {
+    if (std::filesystem::is_directory(path)) {
+        for (auto& entry : std::filesystem::directory_iterator(path)) {
+            if (entry.is_directory()) {
+                recursiveDelete(entry.path().string());
+            } else {
+                std::filesystem::remove(entry.path());
+            }
+        }
+        std::filesystem::remove_all(path);
+    } else {
+        std::filesystem::remove(path);
+    }
+};
+
+std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
+    std::pair("runshell", new NativeFunctionEntry({{"command", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* command = args->getString("command");
+        if (!command) {
+            std::cerr << "Failed to parse runshell block" << std::endl;
+            return nullptr;
+        }
+        StringEntry* entry = new StringEntry();
+
+        std::array<char, 128> buffer;
+        std::string resultStr;
+        std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command->getValue().c_str(), "r"), pclose);
+        if (!pipe) {
+            throw std::runtime_error("popen() failed!");
+        }
+        while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) != nullptr) {
+            resultStr += buffer.data();
+        }
+        entry->setValue(resultStr);
+        return entry;
+    })),
+    std::pair("print", new NativeFunctionEntry({{"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        ConfigEntry* result = args->get("value");
+        if (!result) {
+            std::cerr << "Failed to parse print block" << std::endl;
+            return nullptr;
+        }
+        switch (result->getType()) {
+            case EntryType::String: std::cout << ((StringEntry*) result)->getValue(); break;
+            case EntryType::Number: std::cout << ((NumberEntry*) result)->getValue(); break;
+            case EntryType::List: result->print(std::cout); break;
+            case EntryType::Compound: result->print(std::cout); break;
+            default:
+                std::cerr << "Invalid entry type in print block. Expected String or Number but got " << result->getType() << std::endl;
+                return nullptr;
+        }
+        return result;
+    })),
+    std::pair("use", new NativeFunctionEntry({{"file", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* result = args->getString("file");
+        if (!result) {
+            std::cerr << "Failed to parse use block" << std::endl;
+            return nullptr;
+        }
+        std::string file = result->getValue();
+        CompoundEntry* entry = parser->parse(file, compoundStack);
+        if (!entry) {
+            std::cerr << "Failed to parse file '" << file << "'" << std::endl;
+            return nullptr;
+        }
+        if (compoundStack.size() < 2) {
+            std::cerr << "Invalid compound stack size: " << compoundStack.size() << std::endl;
+            return nullptr;
+        }
+        compoundStack.at(compoundStack.size() - 2)->merge(entry);
+        return entry;
+    })),
+    std::pair("printLn", new NativeFunctionEntry({{"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        ConfigEntry* result = args->get("value");
+        if (!result) {
+            std::cerr << "Failed to parse printLn block" << std::endl;
+            return nullptr;
+        }
+        switch (result->getType()) {
+            case EntryType::String: std::cout << ((StringEntry*) result)->getValue(); break;
+            case EntryType::Number: std::cout << ((NumberEntry*) result)->getValue(); break;
+            case EntryType::List: result->print(std::cout); break;
+            case EntryType::Compound: result->print(std::cout); break;
+            default:
+                std::cerr << "Invalid entry type in printLn block. Expected String or Number but got " << result->getType() << std::endl;
+                return nullptr;
+        }
+        std::cout << std::endl;
+        return result;
+    })),
+    std::pair("readLn", new NativeFunctionEntry({}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        std::string line;
+        std::getline(std::cin, line);
+        StringEntry* entry = new StringEntry();
+        entry->setValue(line);
+        return entry;
+    })),
+    std::pair("eq", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        NumberEntry* entryA = args->getNumber("a");
+        NumberEntry* entryB = args->getNumber("b");
+        if (!entryA || !entryB) {
+            std::cerr << "Failed to parse eq block" << std::endl;
+            return nullptr;
+        }
+        NumberEntry* result = new NumberEntry();
+        result->setValue(entryA->getType() == entryB->getType() && entryA->operator==(*entryB) ? 1 : 0);
+        return result;
+    })),
+    std::pair("ne", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        NumberEntry* entryA = args->getNumber("a");
+        NumberEntry* entryB = args->getNumber("b");
+        if (!entryA || !entryB) {
+            std::cerr << "Failed to parse ne block" << std::endl;
+            return nullptr;
+        }
+        NumberEntry* result = new NumberEntry();
+        result->setValue(entryA->getType() != entryB->getType() || entryA->operator!=(*entryB) ? 1 : 0);
+        return result;
+    })),
+    std::pair("string-length", new NativeFunctionEntry({{"value", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* entry = args->getString("value");
+        if (!entry) {
+            std::cerr << "Failed to parse string-length block" << std::endl;
+            return nullptr;
+        }
+        NumberEntry* result = new NumberEntry();
+        result->setValue(entry->getValue().length());
+        return result;
+    })),
+    std::pair("string-substring", new NativeFunctionEntry({{"string", Type::String()}, {"start", Type::Number()}, {"end", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* str = args->getString("string");
+        NumberEntry* start = args->getNumber("start");
+        NumberEntry* end = args->getNumber("end");
+        if (!str || !start || !end) {
+            std::cerr << "Failed to parse string-substring block" << std::endl;
+            return nullptr;
+        }
+        std::string value = str->getValue();
+        long long startValue = start->getValue();
+        long long endValue = end->getValue();
+        if (startValue < 0 || startValue >= value.size() || endValue < 0 || endValue >= value.size()) {
+            std::cerr << "Invalid start or end value in string-substring block" << std::endl;
+            return nullptr;
+        }
+        StringEntry* result = new StringEntry();
+        result->setValue(value.substr(startValue, endValue - startValue));
+        return result;
+    })),
 
 #define BINARY_OP(_name, _op) \
-    std::pair(_name, [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* { \
-        i++; \
-        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack); \
-        i++; \
-        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack); \
+    std::pair(_name, new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* { \
+        NumberEntry* entryA = args->getNumber("a"); \
+        NumberEntry* entryB = args->getNumber("b"); \
         if (!entryA || !entryB) { \
-            LYNX_ERR << "Failed to parse " _name " block" << std::endl; \
-            return nullptr; \
-        } \
-        if (entryA->getType() != EntryType::Number) { \
-            LYNX_ERR << "Invalid entry type in " _name " block. Expected Number but got " << entryA->getType() << std::endl; \
-            return nullptr; \
-        } \
-        if (entryB->getType() != EntryType::Number) { \
-            LYNX_ERR << "Invalid entry type in " _name " block. Expected Number but got " << entryB->getType() << std::endl; \
+            std::cerr << "Failed to parse " _name " block" << std::endl; \
             return nullptr; \
         } \
         NumberEntry* result = new NumberEntry(); \
-        result->setValue(((NumberEntry*) entryA)->getValue() _op ((NumberEntry*) entryB)->getValue()); \
+        result->setValue(entryA->getValue() _op entryB->getValue()); \
         return result; \
-    }),
+    })),
 
     BINARY_OP("add", +)
     BINARY_OP("sub", -)
@@ -507,525 +475,438 @@ std::unordered_map<std::string, Command> commands {
 
 #undef BINARY_OP
 #define UNARY_OP(_name, _op) \
-    std::pair(_name, [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* { \
-        i++; \
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack); \
+    std::pair(_name, new NativeFunctionEntry({{"value", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* { \
+        NumberEntry* entry = args->getNumber("value"); \
         if (!entry) { \
-            LYNX_ERR << "Failed to parse " _name " block" << std::endl; \
+            std::cerr << "Failed to parse " _name " block" << std::endl; \
             return nullptr; \
         } \
         if (entry->getType() != EntryType::Number) { \
-            LYNX_ERR << "Invalid entry type in " _name " block. Expected Number but got " << entry->getType() << std::endl; \
+            std::cerr << "Invalid entry type in " _name " block. Expected Number but got " << entry->getType() << std::endl; \
             return nullptr; \
         } \
         NumberEntry* result = new NumberEntry(); \
-        result->setValue(_op ((NumberEntry*) entry)->getValue()); \
+        result->setValue(_op entry->getValue()); \
         return result; \
-    }),
+    })),
 
     UNARY_OP("not", !)
     
 #undef UNARY_OP
-    std::pair("mod", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack);
-        i++;
-        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack);
+    std::pair("mod", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        NumberEntry* entryA = args->getNumber("a");
+        NumberEntry* entryB = args->getNumber("b");
         if (!entryA || !entryB) {
-            LYNX_ERR << "Failed to parse modulo block" << std::endl;
-            return nullptr;
-        }
-        if (entryA->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in modulo block. Expected Number but got " << entryA->getType() << std::endl;
-            return nullptr;
-        }
-        if (entryB->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in modulo block. Expected Number but got " << entryB->getType() << std::endl;
+            std::cerr << "Failed to parse modulo block" << std::endl;
             return nullptr;
         }
         NumberEntry* result = new NumberEntry();
-        result->setValue(std::fmod(((NumberEntry*) entryA)->getValue(), ((NumberEntry*) entryB)->getValue()));
+        result->setValue(std::fmod(entryA->getValue(), entryB->getValue()));
         return result;
-    }),
-    std::pair("shl", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack);
-        i++;
-        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack);
+    })),
+    std::pair("shl", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        NumberEntry* entryA = args->getNumber("a");
+        NumberEntry* entryB = args->getNumber("b");
         if (!entryA || !entryB) {
-            LYNX_ERR << "Failed to parse left shift block" << std::endl;
-            return nullptr;
-        }
-        if (entryA->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in left shift block. Expected Number but got " << entryA->getType() << std::endl;
-            return nullptr;
-        }
-        if (entryB->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in left shift block. Expected Number but got " << entryB->getType() << std::endl;
+            std::cerr << "Failed to parse left shift block" << std::endl;
             return nullptr;
         }
         NumberEntry* result = new NumberEntry();
-        result->setValue((long long) ((NumberEntry*) entryA)->getValue() << (long long) ((NumberEntry*) entryB)->getValue());
+        result->setValue((long long) entryA->getValue() << (long long) entryB->getValue());
         return result;
-    }),
-    std::pair("shr", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack);
-        i++;
-        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack);
+    })),
+    std::pair("shr", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        NumberEntry* entryA = args->getNumber("a");
+        NumberEntry* entryB = args->getNumber("b");
         if (!entryA || !entryB) {
-            LYNX_ERR << "Failed to parse right shift block" << std::endl;
-            return nullptr;
-        }
-        if (entryA->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in right shift block. Expected Number but got " << entryA->getType() << std::endl;
-            return nullptr;
-        }
-        if (entryB->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in right shift block. Expected Number but got " << entryB->getType() << std::endl;
+            std::cerr << "Failed to parse right shift block" << std::endl;
             return nullptr;
         }
         NumberEntry* result = new NumberEntry();
-        result->setValue((long long) ((NumberEntry*) entryA)->getValue() >> (long long) ((NumberEntry*) entryB)->getValue());
+        result->setValue((long long) entryA->getValue() >> (long long) entryB->getValue());
         return result;
-    }),
-    std::pair("range", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entryA = parser->parseValue(tokens, i, compoundStack);
-        i++;
-        ConfigEntry* entryB = parser->parseValue(tokens, i, compoundStack);
+    })),
+    std::pair("range", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        NumberEntry* entryA = args->getNumber("a");
+        NumberEntry* entryB = args->getNumber("b");
         if (!entryA || !entryB) {
-            LYNX_ERR << "Failed to parse range block" << std::endl;
-            return nullptr;
-        }
-        if (entryA->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in range block. Expected Number but got " << entryA->getType() << std::endl;
-            return nullptr;
-        }
-        if (entryB->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in range block. Expected Number but got " << entryB->getType() << std::endl;
+            std::cerr << "Failed to parse range block" << std::endl;
             return nullptr;
         }
         ListEntry* result = new ListEntry();
-        long long start = ((NumberEntry*) entryA)->getValue();
-        long long end = ((NumberEntry*) entryB)->getValue();
+        long long start = entryA->getValue();
+        long long end = entryB->getValue();
         for (long long i = start; i < end; i++) {
             NumberEntry* entry = new NumberEntry();
             entry->setValue(i);
             result->add(entry);
         }
         return result;
-    }),
-    std::pair("len", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* list = parser->parseValue(tokens, i, compoundStack);
+    })),
+    std::pair("list-length", new NativeFunctionEntry({{"list", Type::List(Type::Any())}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        ListEntry* list = args->getList("list");
         if (!list) {
-            LYNX_ERR << "Failed to parse range block" << std::endl;
-            return nullptr;
-        }
-        if (list->getType() != EntryType::List) {
-            LYNX_ERR << "Invalid entry type in len block. Expected List but got " << list->getType() << std::endl;
+            std::cerr << "Failed to parse list" << std::endl;
             return nullptr;
         }
         NumberEntry* result = new NumberEntry();
-        result->setValue(((ListEntry*) list)->size());
+        result->setValue(list->size());
         return result;
-    }),
-    std::pair("list-get", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* list = parser->parseValue(tokens, i, compoundStack);
+    })),
+    std::pair("list-get", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"index", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        ListEntry* list = args->getList("list");
         if (!list) {
-            LYNX_ERR << "Failed to parse list" << std::endl;
+            std::cerr << "Failed to parse list" << std::endl;
             return nullptr;
         }
-        if (list->getType() != EntryType::List) {
-            LYNX_ERR << "Invalid entry type in get. Expected List but got " << list->getType() << std::endl;
-            return nullptr;
-        }
-        i++;
-        ConfigEntry* index = parser->parseValue(tokens, i, compoundStack);
+        NumberEntry* index = args->getNumber("index");
         if (!index) {
-            LYNX_ERR << "Failed to parse index" << std::endl;
+            std::cerr << "Failed to parse index" << std::endl;
             return nullptr;
         }
-        if (index->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in get. Expected Number but got " << index->getType() << std::endl;
+        long long idx = index->getValue();
+        if (idx < 0 || idx >= list->size()) {
+            std::cerr << "Index out of bounds" << std::endl;
             return nullptr;
         }
-        ListEntry* listEntry = (ListEntry*) list;
-        long long idx = ((NumberEntry*) index)->getValue();
-        if (idx < 0 || idx >= listEntry->size()) {
-            LYNX_ERR << "Index out of bounds" << std::endl;
-            return nullptr;
-        }
-        return listEntry->get(idx)->clone();
-    }),
-    std::pair("list-set", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* list = parser->parseValue(tokens, i, compoundStack);
+        return list->get(idx)->clone();
+    })),
+    std::pair("list-set", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"index", Type::Number()}, {"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        ListEntry* list = args->getList("list");
         if (!list) {
-            LYNX_ERR << "Failed to parse range block" << std::endl;
+            std::cerr << "Failed to parse list" << std::endl;
             return nullptr;
         }
-        if (list->getType() != EntryType::List) {
-            LYNX_ERR << "Invalid entry type in len block. Expected List but got " << list->getType() << std::endl;
-            return nullptr;
-        }
-        i++;
-        ConfigEntry* index = parser->parseValue(tokens, i, compoundStack);
+        NumberEntry* index = args->getNumber("index");
         if (!index) {
-            LYNX_ERR << "Failed to parse index" << std::endl;
+            std::cerr << "Failed to parse index" << std::endl;
             return nullptr;
         }
-        if (index->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in get. Expected Number but got " << index->getType() << std::endl;
-            return nullptr;
-        }
-        i++;
-        ConfigEntry* value = parser->parseValue(tokens, i, compoundStack);
+        ConfigEntry* value = args->get("value");
         if (!value) {
-            LYNX_ERR << "Failed to parse value" << std::endl;
+            std::cerr << "Failed to parse value" << std::endl;
             return nullptr;
         }
-        ListEntry* listEntry = (ListEntry*) list;
-        if (value->getType() != listEntry->getListType()) {
-            LYNX_ERR << "Invalid entry type in set. Expected " << listEntry->getListType() << " but got " << value->getType() << std::endl;
+        if (value->getType() != list->getListType()) {
+            std::cerr << "Invalid entry type in set. Expected " << list->getListType() << " but got " << value->getType() << std::endl;
             return nullptr;
         }
-        long long idx = ((NumberEntry*) index)->getValue();
-        if (idx < 0 || idx >= listEntry->size()) {
-            LYNX_ERR << "Index out of bounds" << std::endl;
+        long long idx = index->getValue();
+        if (idx < 0 || idx >= list->size()) {
+            std::cerr << "Index out of bounds" << std::endl;
             return nullptr;
         }
-        listEntry->get(idx) = value->clone();
-        return new StringEntry();
-    }),
-    std::pair("list-append", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* list = parser->parseValue(tokens, i, compoundStack);
+        return list->get(idx) = value->clone();
+    })),
+    std::pair("list-append", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        ListEntry* list = args->getList("list");
         if (!list) {
-            LYNX_ERR << "Failed to parse range block" << std::endl;
+            std::cerr << "Failed to parse list" << std::endl;
             return nullptr;
         }
-        if (list->getType() != EntryType::List) {
-            LYNX_ERR << "Invalid entry type in len block. Expected List but got " << list->getType() << std::endl;
-            return nullptr;
-        }
-        i++;
-        ConfigEntry* value = parser->parseValue(tokens, i, compoundStack);
+        ConfigEntry* value = args->get("value");
         if (!value) {
-            LYNX_ERR << "Failed to parse value" << std::endl;
+            std::cerr << "Failed to parse value" << std::endl;
             return nullptr;
         }
-        ListEntry* listEntry = (ListEntry*) list;
-        if (value->getType() != listEntry->getListType()) {
-            LYNX_ERR << "Invalid entry type in append. Expected " << listEntry->getListType() << " but got " << value->getType() << std::endl;
+        if (value->getType() != list->getListType()) {
+            std::cerr << "Invalid entry type in append. Expected " << list->getListType() << " but got " << value->getType() << std::endl;
             return nullptr;
         }
-        listEntry->add(value->clone());
+        list->add(value->clone());
         return new StringEntry();
-    }),
-    std::pair("list-remove", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* list = parser->parseValue(tokens, i, compoundStack);
+    })),
+    std::pair("list-remove", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"index", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        ListEntry* list = args->getList("list");
         if (!list) {
-            LYNX_ERR << "Failed to parse range block" << std::endl;
+            std::cerr << "Failed to parse list" << std::endl;
             return nullptr;
         }
-        if (list->getType() != EntryType::List) {
-            LYNX_ERR << "Invalid entry type in len block. Expected List but got " << list->getType() << std::endl;
-            return nullptr;
-        }
-        i++;
-        ConfigEntry* index = parser->parseValue(tokens, i, compoundStack);
+        NumberEntry* index = args->getNumber("index");
         if (!index) {
-            LYNX_ERR << "Failed to parse index" << std::endl;
+            std::cerr << "Failed to parse index" << std::endl;
             return nullptr;
         }
-        if (index->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in get. Expected Number but got " << index->getType() << std::endl;
+        long long idx = index->getValue();
+        if (idx < 0 || idx >= list->size()) {
+            std::cerr << "Index out of bounds" << std::endl;
             return nullptr;
         }
-        ListEntry* listEntry = (ListEntry*) list;
-        long long idx = ((NumberEntry*) index)->getValue();
-        if (idx < 0 || idx >= listEntry->size()) {
-            LYNX_ERR << "Index out of bounds" << std::endl;
-            return nullptr;
-        }
-        listEntry->remove(idx);
+        list->remove(idx);
         return new StringEntry();
-    }),
-    std::pair("inc", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse inc block" << std::endl;
-            return nullptr;
-        }
-        if (entry->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in inc block. Expected Number but got " << entry->getType() << std::endl;
+    })),
+    std::pair("inc", new NativeFunctionEntry({{"value", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        NumberEntry* value = args->getNumber("value");
+        if (!value) {
+            std::cerr << "Failed to parse inc block" << std::endl;
             return nullptr;
         }
         NumberEntry* result = new NumberEntry();
-        result->setValue(((NumberEntry*) entry)->getValue() + 1);
+        result->setValue(value->getValue() + 1);
         return result;
-    }),
-    std::pair("dec", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse dec block" << std::endl;
-            return nullptr;
-        }
-        if (entry->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in dec block. Expected Number but got " << entry->getType() << std::endl;
+    })),
+    std::pair("dec", new NativeFunctionEntry({{"value", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        NumberEntry* value = args->getNumber("value");
+        if (!value) {
+            std::cerr << "Failed to parse dec block" << std::endl;
             return nullptr;
         }
         NumberEntry* result = new NumberEntry();
-        result->setValue(((NumberEntry*) entry)->getValue() - 1);
+        result->setValue(value->getValue() - 1);
         return result;
-    }),
-    std::pair("exit", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse exit block" << std::endl;
+    })),
+    std::pair("exit", new NativeFunctionEntry({{"value", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        NumberEntry* value = args->getNumber("value");
+        if (!value) {
+            std::cerr << "Failed to parse exit block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::Number) {
-            LYNX_ERR << "Invalid entry type in exit block. Expected Number but got " << entry->getType() << std::endl;
+        int exitCode = value->getValue();
+        std::exit(exitCode);
+        return new StringEntry();
+    })),
+    std::pair("file-mkdir", new NativeFunctionEntry({{"path", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* str = args->getString("path");
+        if (!str) {
+            std::cerr << "Failed to parse file-mkdir block" << std::endl;
             return nullptr;
         }
-        NumberEntry* number = (NumberEntry*) entry;
-        std::exit(number->getValue());
-    }),
-    std::pair("file-mkdir", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse file-mkdir block" << std::endl;
+        if (str->getValue().empty()) {
+            std::cerr << "Invalid path in file-mkdir block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in file-mkdir block. Expected String but got " << entry->getType() << std::endl;
+        if (std::filesystem::exists(str->getValue())) {
+            std::cerr << "Path already exists: " << str->getValue() << std::endl;
             return nullptr;
         }
-        StringEntry* str = (StringEntry*) entry;
-        if (std::filesystem::create_directories(str->getValue())) {
-            LYNX_ERR << "Failed to create directory: " << str->getValue() << std::endl;
+        if (std::filesystem::is_directory(str->getValue())) {
+            std::cerr << "Path is already a directory: " << str->getValue() << std::endl;
+            return nullptr;
+        }
+        if (!std::filesystem::create_directories(str->getValue())) {
+            std::cerr << "Failed to create directory: " << str->getValue() << std::endl;
             return nullptr;
         }
         return new StringEntry();
-    }),
-    std::pair("file-rmdir", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse file-rmdir block" << std::endl;
+    })),
+    std::pair("file-rmdir", new NativeFunctionEntry({{"path", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* str = args->getString("path");
+        if (!str) {
+            std::cerr << "Failed to parse file-rmdir block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in file-rmdir block. Expected String but got " << entry->getType() << std::endl;
+        if (str->getValue().empty()) {
+            std::cerr << "Invalid path in file-rmdir block" << std::endl;
             return nullptr;
         }
-        StringEntry* str = (StringEntry*) entry;
-        if (std::filesystem::remove_all(str->getValue())) {
-            LYNX_ERR << "Failed to remove directory: " << str->getValue() << std::endl;
+        if (!std::filesystem::exists(str->getValue())) {
+            std::cerr << "Path does not exist: " << str->getValue() << std::endl;
             return nullptr;
         }
+        recursiveDelete(str->getValue());
         return new StringEntry();
-    }),
-    std::pair("file-rm", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse file-rm block" << std::endl;
+    })),
+    std::pair("file-remove", new NativeFunctionEntry({{"path", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* str = args->getString("path");
+        if (!str) {
+            std::cerr << "Failed to parse file-remove block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in file-rm block. Expected String but got " << entry->getType() << std::endl;
+        if (str->getValue().empty()) {
+            std::cerr << "Invalid path in file-remove block" << std::endl;
             return nullptr;
         }
-        StringEntry* str = (StringEntry*) entry;
-        if (std::filesystem::remove(str->getValue())) {
-            LYNX_ERR << "Failed to remove file: " << str->getValue() << std::endl;
+        if (!std::filesystem::exists(str->getValue())) {
+            std::cerr << "Path does not exist: " << str->getValue() << std::endl;
             return nullptr;
         }
+        std::filesystem::remove(str->getValue());
         return new StringEntry();
-    }),
-    std::pair("file-write", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse file-write block" << std::endl;
+    })),
+    std::pair("file-write", new NativeFunctionEntry({{"path", Type::String()}, {"content", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* path = args->getString("path");
+        if (!path) {
+            std::cerr << "Failed to parse file-write block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in file-write block. Expected String but got " << entry->getType() << std::endl;
+        if (path->getValue().empty()) {
+            std::cerr << "Invalid path in file-write block" << std::endl;
             return nullptr;
         }
-        ConfigEntry* entry2 = parser->parseValue(tokens, i, compoundStack);
-        if (!entry2) {
-            LYNX_ERR << "Failed to parse file-write block" << std::endl;
+        StringEntry* content = args->getString("content");
+        if (!content) {
+            std::cerr << "Failed to parse content in file-write block" << std::endl;
             return nullptr;
         }
-        if (entry2->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in file-write block. Expected String but got " << entry2->getType() << std::endl;
-            return nullptr;
+        if (std::filesystem::exists(path->getValue())) {
+            if (std::filesystem::is_directory(path->getValue())) {
+                recursiveDelete(path->getValue());
+            } else {
+                if (!std::filesystem::remove(path->getValue())) {
+                    std::cerr << "Failed to remove existing file: " << path->getValue() << std::endl;
+                    return nullptr;
+                }
+            }
         }
-        StringEntry* filename = (StringEntry*) entry;
-        StringEntry* content = (StringEntry*) entry2;
-        std::ofstream file(filename->getValue());
+        std::ofstream file(path->getValue());
         if (!file.is_open()) {
-            LYNX_ERR << "Failed to open file: " << filename->getValue() << std::endl;
+            std::cerr << "Failed to open file: " << path->getValue() << std::endl;
             return nullptr;
         }
         file << content->getValue();
         if (file.fail()) {
-            LYNX_ERR << "Failed to write to file: " << filename->getValue() << std::endl;
+            std::cerr << "Failed to write to file: " << path->getValue() << std::endl;
             return nullptr;
         }
         file.close();
-        return new StringEntry();
-    }),
-    std::pair("file-read", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse file-read block" << std::endl;
+        StringEntry* result = new StringEntry();
+        result->setValue(path->getValue());
+        return result;
+    })),
+    std::pair("file-read", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* filename = args->getString("filename");
+        if (!filename) {
+            std::cerr << "Failed to parse file-read block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in file-read block. Expected String but got " << entry->getType() << std::endl;
+        if (filename->getValue().empty()) {
+            std::cerr << "Invalid filename in file-read block" << std::endl;
             return nullptr;
         }
-        StringEntry* filename = (StringEntry*) entry;
         std::ifstream file(filename->getValue());
         if (!file.is_open()) {
-            LYNX_ERR << "Failed to open file: " << filename->getValue() << std::endl;
+            std::cerr << "Failed to open file: " << filename->getValue() << std::endl;
             return nullptr;
         }
         std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
         if (file.fail()) {
-            LYNX_ERR << "Failed to read from file: " << filename->getValue() << std::endl;
+            std::cerr << "Failed to read from file: " << filename->getValue() << std::endl;
             return nullptr;
         }
         file.close();
         StringEntry* result = new StringEntry();
         result->setValue(content);
         return result;
-    }),
-    std::pair("file-exists", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse file-exists block" << std::endl;
+    })),
+    std::pair("file-exists", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* filename = args->getString("filename");
+        if (!filename) {
+            std::cerr << "Failed to parse file-exists block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in file-exists block. Expected String but got " << entry->getType() << std::endl;
+        if (filename->getValue().empty()) {
+            std::cerr << "Invalid filename in file-exists block" << std::endl;
             return nullptr;
         }
-        StringEntry* filename = (StringEntry*) entry;
         NumberEntry* result = new NumberEntry();
         result->setValue(std::filesystem::exists(filename->getValue()) ? 1 : 0);
         return result;
-    }),
-    std::pair("file-isdir", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse file-isdir block" << std::endl;
+    })),
+    std::pair("file-isdir", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* filename = args->getString("filename");
+        if (!filename) {
+            std::cerr << "Failed to parse file-isdir block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in file-isdir block. Expected String but got " << entry->getType() << std::endl;
+        if (filename->getValue().empty()) {
+            std::cerr << "Invalid filename in file-isdir block" << std::endl;
             return nullptr;
         }
-        StringEntry* filename = (StringEntry*) entry;
         NumberEntry* result = new NumberEntry();
         result->setValue(std::filesystem::is_directory(filename->getValue()) ? 1 : 0);
         return result;
-    }),
-    std::pair("file-isfile", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse file-isfile block" << std::endl;
+    })),
+    std::pair("file-isfile", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* filename = args->getString("filename");
+        if (!filename) {
+            std::cerr << "Failed to parse file-isfile block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in file-isfile block. Expected String but got " << entry->getType() << std::endl;
+        if (filename->getValue().empty()) {
+            std::cerr << "Invalid filename in file-isfile block" << std::endl;
             return nullptr;
         }
-        StringEntry* filename = (StringEntry*) entry;
         NumberEntry* result = new NumberEntry();
         result->setValue(std::filesystem::is_regular_file(filename->getValue()) ? 1 : 0);
         return result;
-    }),
-    std::pair("file-dirname", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse file-dirname block" << std::endl;
+    })),
+    std::pair("file-dirname", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* filename = args->getString("filename");
+        if (!filename) {
+            std::cerr << "Failed to parse file-dirname block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in file-dirname block. Expected String but got " << entry->getType() << std::endl;
+        if (filename->getValue().empty()) {
+            std::cerr << "Invalid filename in file-dirname block" << std::endl;
             return nullptr;
         }
-        StringEntry* filename = (StringEntry*) entry;
         StringEntry* result = new StringEntry();
         result->setValue(std::filesystem::path(filename->getValue()).parent_path().string());
         return result;
-    }),
-    std::pair("file-basename", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse file-basename block" << std::endl;
+    })),
+    std::pair("file-basename", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* filename = args->getString("filename");
+        if (!filename) {
+            std::cerr << "Failed to parse file-basename block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in file-basename block. Expected String but got " << entry->getType() << std::endl;
+        if (filename->getValue().empty()) {
+            std::cerr << "Invalid filename in file-basename block" << std::endl;
             return nullptr;
         }
-        StringEntry* filename = (StringEntry*) entry;
         StringEntry* result = new StringEntry();
         result->setValue(std::filesystem::path(filename->getValue()).filename().string());
         return result;
-    }),
-    std::pair("file-extname", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse file-extname block" << std::endl;
+    })),
+    std::pair("file-extname", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        StringEntry* filename = args->getString("filename");
+        if (!filename) {
+            std::cerr << "Failed to parse file-extname block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in file-extname block. Expected String but got " << entry->getType() << std::endl;
+        if (filename->getValue().empty()) {
+            std::cerr << "Invalid filename in file-extname block" << std::endl;
             return nullptr;
         }
-        StringEntry* filename = (StringEntry*) entry;
         StringEntry* result = new StringEntry();
         result->setValue(std::filesystem::path(filename->getValue()).extension().string());
         return result;
-    }),
-    std::pair("error", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
-        if (!entry) {
-            LYNX_ERR << "Failed to parse error block" << std::endl;
+    })),
+    std::pair("printErr", new NativeFunctionEntry({{"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        ConfigEntry* result = args->get("value");
+        if (!result) {
+            std::cerr << "Failed to parse printErr block" << std::endl;
             return nullptr;
         }
-        if (entry->getType() != EntryType::String) {
-            LYNX_ERR << "Invalid entry type in error block. Expected String but got " << entry->getType() << std::endl;
+        switch (result->getType()) {
+            case EntryType::String: std::cerr << ((StringEntry*) result)->getValue(); break;
+            case EntryType::Number: std::cerr << ((NumberEntry*) result)->getValue(); break;
+            case EntryType::List: result->print(std::cerr); break;
+            case EntryType::Compound: result->print(std::cerr); break;
+            default:
+                std::cerr << "Invalid entry type in printErr block. Expected String or Number but got " << result->getType() << std::endl;
+                return nullptr;
+        }
+        return result;
+    })),
+    std::pair("printErrLn", new NativeFunctionEntry({{"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        ConfigEntry* result = args->get("value");
+        if (!result) {
+            std::cerr << "Failed to parse printErrLn block" << std::endl;
             return nullptr;
         }
-        StringEntry* str = (StringEntry*) entry;
-        LYNX_ERR << str->getValue() << std::endl;
-        return nullptr;
-    }),
+        switch (result->getType()) {
+            case EntryType::String: std::cerr << ((StringEntry*) result)->getValue(); break;
+            case EntryType::Number: std::cerr << ((NumberEntry*) result)->getValue(); break;
+            case EntryType::List: result->print(std::cerr); break;
+            case EntryType::Compound: result->print(std::cerr); break;
+            default:
+                std::cerr << "Invalid entry type in printErrLn block. Expected String or Number but got " << result->getType() << std::endl;
+                return nullptr;
+        }
+        std::cerr << std::endl;
+        return result;
+    })),
 };
 
 ConfigEntry* ConfigEntry::Null = nullptr;
@@ -1074,9 +955,114 @@ ConfigEntry* FunctionEntry::clone() {
     FunctionEntry* newFunc = new FunctionEntry();
     newFunc->body = this->body;
     newFunc->args = this->args;
-    newFunc->compoundStack = this->compoundStack;
     newFunc->isDotCallable = this->isDotCallable;
     return newFunc;
+}
+
+ConfigEntry* DeclaredFunctionEntry::clone() {
+    DeclaredFunctionEntry* newFunc = new DeclaredFunctionEntry();
+    newFunc->body = this->body;
+    newFunc->args = this->args;
+    newFunc->isDotCallable = this->isDotCallable;
+    newFunc->compoundStack = this->compoundStack;
+    return newFunc;
+}
+
+DeclaredFunctionEntry::DeclaredFunctionEntry() {
+    this->setType(EntryType::Function);
+    this->isDotCallable = false;
+}
+
+ConfigEntry* FunctionEntry::call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) {
+    int tmp = 0;
+    CompoundEntry* args = new CompoundEntry();
+    for (size_t n = 0; n < this->args.size(); n++) {
+        i++;
+        ConfigEntry* arg = parser->parseValue(tokens, i, compoundStack);
+        if (!arg) {
+            LYNX_ERR << "Failed to parse argument '" << this->args[n].key << "'" << std::endl;
+            return nullptr;
+        }
+        arg = arg->clone();
+        if (!this->args[n].type->validate(arg, {})) {
+            LYNX_ERR << "Invalid argument type" << std::endl;
+            return nullptr;
+        }
+        arg->setKey(this->args[n].key);
+        args->add(arg);
+    }
+    compoundStack.push_back(args);
+    int x = 0;
+    ConfigEntry* result = parser->parseValue(this->body, x, compoundStack);
+    compoundStack.pop_back();
+    if (!result) {
+        LYNX_ERR << "Failed to run function" << std::endl;
+        return nullptr;
+    }
+    return result;
+}
+
+ConfigEntry* DeclaredFunctionEntry::call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) {
+    int tmp = 0;
+    CompoundEntry* args = new CompoundEntry();
+    for (size_t n = 0; n < this->args.size(); n++) {
+        i++;
+        ConfigEntry* arg = parser->parseValue(tokens, i, compoundStack);
+        if (!arg) {
+            LYNX_ERR << "Failed to parse argument '" << this->args[n].key << "'" << std::endl;
+            return nullptr;
+        }
+        arg = arg->clone();
+        if (!this->args[n].type->validate(arg, {})) {
+            LYNX_ERR << "Invalid argument type" << std::endl;
+            return nullptr;
+        }
+        arg->setKey(this->args[n].key);
+        args->add(arg);
+    }
+    this->compoundStack.push_back(args);
+    int x = 0;
+    ConfigEntry* result = parser->parseValue(this->body, x, this->compoundStack);
+    this->compoundStack.pop_back();
+    if (!result) {
+        LYNX_ERR << "Failed to run function" << std::endl;
+        return nullptr;
+    }
+    return result;
+}
+
+ConfigEntry* NativeFunctionEntry::call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) {
+    int tmp = 0;
+    CompoundEntry* args = new CompoundEntry();
+    for (size_t n = 0; n < this->args.size(); n++) {
+        i++;
+        ConfigEntry* arg = parser->parseValue(tokens, i, compoundStack);
+        if (!arg) {
+            LYNX_ERR << "Failed to parse argument '" << this->args[n].key << "'" << std::endl;
+            return nullptr;
+        }
+        arg = arg->clone();
+        if (!this->args[n].type->validate(arg, {})) {
+            LYNX_ERR << "Invalid argument type" << std::endl;
+            return nullptr;
+        }
+        arg->setKey(this->args[n].key);
+        args->add(arg);
+    }
+    compoundStack.push_back(args);
+    ConfigEntry* result = this->func(parser, compoundStack, args);
+    compoundStack.pop_back();
+    if (!result) {
+        LYNX_ERR << "Failed to run function" << std::endl;
+        return nullptr;
+    }
+    return result;
+}
+
+NativeFunctionEntry::NativeFunctionEntry(std::vector<Type::CompoundType> args, typeof(NativeFunctionEntry::func) func) {
+    this->setType(EntryType::Function);
+    this->args = args;
+    this->func = func;
 }
 
 std::string ConfigEntry::getKey() const {
@@ -1113,6 +1099,9 @@ std::ostream& operator<<(std::ostream& out, EntryType type) {
             break;
         case EntryType::Function:
             out << "Function";
+            break;
+        case EntryType::Any:
+            out << "Any";
             break;
         case EntryType::Invalid:
             out << "Invalid";
@@ -1326,6 +1315,13 @@ StringEntry* CompoundEntry::getStringOrDefault(const std::string& key, const std
     entry = new StringEntry();
     entry->setValue(defaultValue);
     return entry;
+}
+NumberEntry* CompoundEntry::getNumber(const std::string& key) {
+    auto x = get(key);
+    if (x && x->getType() == EntryType::Number) {
+        return reinterpret_cast<NumberEntry*>(x);
+    }
+    return nullptr;
 }
 ListEntry* CompoundEntry::getList(const std::string& key) {
     auto x = get(key);
@@ -1847,6 +1843,59 @@ bool Type::CompoundType::operator!=(const Type::CompoundType& other) const {
     return !operator==(other);
 }
 
+Type* Type::String() {
+    Type* type = new Type();
+    type->type = EntryType::String;
+    return type;
+}
+
+Type* Type::Number() {
+    Type* type = new Type();
+    type->type = EntryType::Number;
+    return type;
+}
+
+Type* Type::List(Type* type) {
+    Type* t = new Type();
+    t->type = EntryType::List;
+    t->listType = type;
+    return t;
+}
+
+Type* Type::Compound(std::vector<CompoundType> types) {
+    Type* type = new Type();
+    type->type = EntryType::Compound;
+    type->compoundTypes = new std::vector<CompoundType>();
+    for (const auto& compoundType : types) {
+        type->compoundTypes->push_back(compoundType);
+    }
+    return type;
+}
+
+Type* Type::Function(std::vector<CompoundType> types) {
+    Type* type = Type::Compound(types);
+    type->type = EntryType::Function;
+    return type;
+}
+
+Type* Type::Optional(Type* type) {
+    Type* t = type->clone();
+    t->isOptional = true;
+    return t;
+}
+
+Type* Type::Any() {
+    return new AnyType();
+}
+
+bool AnyType::validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out) {
+    return true;
+}
+
+AnyType::AnyType() {
+    this->type = EntryType::Any;
+}
+
 bool Token::operator==(const Token& other) const {
     return this->type == other.type && this->value == other.value;
 }
@@ -1998,51 +2047,26 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i, std::v
         }
 
         case Token::Identifier: {
-            auto x = commands.find(tokens[i].value);
-            if (x == commands.end()) {
+            auto x = builtins.find(tokens[i].value);
+            if (x == builtins.end()) {
                 std::string path = makePath(tokens, i);
                 if (path.empty()) {
                     return nullptr;
                 }
                 ConfigEntry* parent = nullptr;
-                ConfigEntry* entry = byPath(path, &parent);
+                ConfigEntry* entry;
+                auto nativeFunc = nativeFunctions.find(tokens[i].value);
+                if (nativeFunc != nativeFunctions.end()) {
+                    entry = nativeFunc->second;
+                } else {
+                    entry = byPath(path, &parent);
+                }
                 if (!entry) {
                     LYNX_ERR << "Failed to find entry by path '" << path << "'" << std::endl;
                     return nullptr;
                 }
                 if (entry->getType() == EntryType::Function) {
-                    FunctionEntry* func = (FunctionEntry*) entry;
-                    int tmp = 0;
-                    CompoundEntry* args = new CompoundEntry();
-                    if (!parent) {
-                        LYNX_ERR << "Unable to find parent of '" << path << "'" << std::endl;
-                        return nullptr;
-                    }
-                    for (size_t n = 0; n < func->args.size(); n++) {
-                        i++;
-                        ConfigEntry* arg = parseValue(tokens, i, compoundStack);
-                        if (!arg) {
-                            LYNX_ERR << "Failed to parse argument '" << func->args[n].key << "'" << std::endl;
-                            return nullptr;
-                        }
-                        arg = arg->clone();
-                        if (!func->args[n].type->validate(arg, {})) {
-                            LYNX_ERR << "Invalid argument type" << std::endl;
-                            return nullptr;
-                        }
-                        arg->setKey(func->args[n].key);
-                        args->add(arg);
-                    }
-                    auto stack = func->compoundStack;
-                    stack.push_back(args);
-                    int x = 0;
-                    ConfigEntry* result = this->parseValue(func->body, x, stack);
-                    stack.pop_back();
-                    if (!result) {
-                        LYNX_ERR << "Failed to run function" << std::endl;
-                        return nullptr;
-                    }
-                    return result;
+                    return ((FunctionEntry*) entry)->call(this, compoundStack, tokens, i);
                 } else {
                     return entry;
                 }

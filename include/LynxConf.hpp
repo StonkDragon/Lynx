@@ -25,7 +25,8 @@ enum class EntryType {
     List,
     Compound,
     Type,
-    Function
+    Function,
+    Any
 };
 
 std::ostream& operator<<(std::ostream& out, EntryType type);
@@ -337,6 +338,12 @@ public:
      */
     CompoundEntry* getCompound(const std::string& key);
     /**
+     * Returns the number entry with the specified key.
+     * @param key The key of the entry to get.
+     * @return The number entry with the specified key.
+     */
+    NumberEntry* getNumber(const std::string& key);
+    /**
      * Adds an entry to the compound entry.
      * If an entry with the same key already exists, it will be replaced.
      * @param entry The entry to add.
@@ -462,17 +469,31 @@ struct Type {
     std::vector<CompoundType>* compoundTypes;
     bool isOptional = false;
 
-    bool validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out = std::cout);
+    virtual bool validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out = std::cout);
     Type* clone();
     bool operator==(const Type& other) const;
     bool operator!=(const Type& other) const;
     std::string toString() const;
+
+    static Type* String();
+    static Type* Number();
+    static Type* List(Type* type);
+    static Type* Compound(std::vector<CompoundType> types);
+    static Type* Function(std::vector<CompoundType> types);
+    static Type* Optional(Type* type);
+    static Type* Any();
 };
+
+struct AnyType: public Type {
+    AnyType();
+    bool validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out = std::cout) override;
+};
+
+struct ConfigParser;
 
 struct FunctionEntry : public ConfigEntry {
     std::vector<Type::CompoundType> args;
     std::vector<Token> body;
-    std::vector<CompoundEntry*> compoundStack;
     bool isDotCallable;
 
     FunctionEntry();
@@ -480,6 +501,15 @@ struct FunctionEntry : public ConfigEntry {
     bool operator!=(const ConfigEntry& other) override;
     void print(std::ostream& stream, int indent = 0) override;
     ConfigEntry* clone() override;
+    virtual ConfigEntry* call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i);
+};
+
+struct DeclaredFunctionEntry : public FunctionEntry {
+    std::vector<CompoundEntry*> compoundStack;
+
+    DeclaredFunctionEntry();
+    ConfigEntry* clone() override;
+    ConfigEntry* call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) override;
 };
 
 struct TypeEntry : public ConfigEntry {
@@ -493,10 +523,7 @@ struct TypeEntry : public ConfigEntry {
     ConfigEntry* clone() override;
 };
 
-struct ConfigParser;
-
-using Command = std::function<ConfigEntry*(std::vector<Token>&, int&, ConfigParser*, std::vector<CompoundEntry*>&)>;
-
+using BuiltinCommand = std::function<ConfigEntry*(std::vector<Token>&, int&, ConfigParser*, std::vector<CompoundEntry*>&)>;
 
 struct ConfigParser {
     /**
@@ -511,4 +538,11 @@ struct ConfigParser {
     CompoundEntry* parseCompound(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
     ListEntry* parseList(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
     ConfigEntry* parseValue(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
+};
+
+struct NativeFunctionEntry : public FunctionEntry {
+    std::function<ConfigEntry*(ConfigParser*, std::vector<CompoundEntry*>&, CompoundEntry* args)> func;
+
+    NativeFunctionEntry(std::vector<Type::CompoundType> args, typeof(func) func);
+    virtual ConfigEntry* call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) override;
 };
