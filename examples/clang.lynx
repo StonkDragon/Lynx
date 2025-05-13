@@ -15,6 +15,20 @@ ClangArgs: compound {
 }
 
 compile = func(what: ClangArgs) (
+    if exists what.output (
+        if file-exists file-dirname what.output (
+            if file-isdir file-dirname what.output (
+                file-rmdir file-dirname what.output
+            ) else (
+                file-remove file-dirname what.output
+            )
+        )
+        file-mkdir (file-dirname what.output)
+    )
+    if exists what.files    (for f in what.files (if not file-exists f (printErrLn ("File not found: " f))))
+    if exists what.include  (for i in what.include (if not file-exists i (printErrLn ("Include path not found: " i))))
+    if exists what.libpath  (for p in what.libpath (if not file-exists p (printErrLn ("Library path not found: " p))))
+
     runshell (
         "clang"
         if exists what.output   (" -o " what.output)

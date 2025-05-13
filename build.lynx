@@ -16,16 +16,22 @@ clang: ClangArgs = {
     optimize = "3"
 }
 
--- (for file in (clang.files) (
---     file-mkdir (file-dirname file)
---     file-copy file ("build/" file)
--- ))
-
--- (file-mkdir "build")
--- (if (file-exists "build/lynx") (
---     file-remove "build/lynx"
--- ))
-
 (compile clang)
 
-(printErrLn "Lynx built successfully.")
+(printLn "Lynx built successfully.")
+
+foo = {
+    (set x ({
+        (set y ({
+            (set z (
+                ("Hello, world!")
+            ))
+        }))
+    }))
+    (printLn x)
+    x = {
+        y = {
+            z = "Hello, world!"
+        }
+    }
+}

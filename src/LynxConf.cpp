@@ -38,7 +38,7 @@
 using namespace std;
 
 std::unordered_map<std::string, BuiltinCommand> builtins {
-    std::pair("func", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+    std::pair("func", [](std::vector<Token> &tokens, int &i, Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack) -> Ref<ConfigEntry> {
         DeclaredFunctionEntry* entry = new DeclaredFunctionEntry();
         i++;
         if (i >= tokens.size()) {
@@ -58,7 +58,7 @@ std::unordered_map<std::string, BuiltinCommand> builtins {
                 return nullptr;
             }
             i++;
-            Type* type = parser->parseType(tokens, i, compoundStack);
+            Ref<Type> type = parser->parseType(tokens, i, compoundStack);
             if (!type) {
                 LYNX_ERR << "Failed to parse type for argument '" << name << "'" << std::endl;
                 return nullptr;
@@ -89,17 +89,17 @@ std::unordered_map<std::string, BuiltinCommand> builtins {
         entry->compoundStack = compoundStack;
         return entry;
     }),
-    std::pair("true", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+    std::pair("true", [](std::vector<Token> &tokens, int &i, Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack) -> Ref<ConfigEntry> {
         NumberEntry* entry = new NumberEntry();
         entry->setValue(1);
         return entry;
     }),
-    std::pair("false", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+    std::pair("false", [](std::vector<Token> &tokens, int &i, Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack) -> Ref<ConfigEntry> {
         NumberEntry* entry = new NumberEntry();
         entry->setValue(0);
         return entry;
     }),
-    std::pair("for", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+    std::pair("for", [](std::vector<Token> &tokens, int &i, Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack) -> Ref<ConfigEntry> {
         i++;
         if (i >= tokens.size() || tokens[i].type != Token::Identifier) {
             LYNX_ERR << "Invalid for loop: Expected identifier" << std::endl;
@@ -116,7 +116,7 @@ std::unordered_map<std::string, BuiltinCommand> builtins {
             return nullptr;
         }
         i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        Ref<ConfigEntry> entry = parser->parseValue(tokens, i, compoundStack);
         i++;
         if (!entry) {
             entry = new ListEntry();
@@ -154,7 +154,7 @@ std::unordered_map<std::string, BuiltinCommand> builtins {
         }
         
         CompoundEntry* compound = nullptr;
-        ConfigEntry* result = nullptr;
+        Ref<ConfigEntry> result = nullptr;
         for (size_t i = 0; i < list->size(); i++) {
             auto value = list->get(i);
             std::string oldKey = value->getKey();
@@ -163,7 +163,7 @@ std::unordered_map<std::string, BuiltinCommand> builtins {
             compoundStack.push_back(compound);
             compound->add(value);
             int newI = 0;
-            ConfigEntry* next = parser->parseValue(forBody, newI, compoundStack);
+            Ref<ConfigEntry> next = parser->parseValue(forBody, newI, compoundStack);
             if (!next) {
                 LYNX_ERR << "Failed to parse for loop block" << std::endl;
                 value->setKey(oldKey);
@@ -177,7 +177,7 @@ std::unordered_map<std::string, BuiltinCommand> builtins {
                 value->setKey(oldKey);
                 return nullptr;
             } else {
-                bool sumEntries(ConfigEntry* a, ConfigEntry* b);
+                bool sumEntries(Ref<ConfigEntry> a, Ref<ConfigEntry> b);
                 if (!sumEntries(result, next)) {
                     value->setKey(oldKey);
                     return nullptr;
@@ -190,9 +190,9 @@ std::unordered_map<std::string, BuiltinCommand> builtins {
         }
         return result;
     }),
-    std::pair("if", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+    std::pair("if", [](std::vector<Token> &tokens, int &i, Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack) -> Ref<ConfigEntry> {
         i++;
-        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        Ref<ConfigEntry> entry = parser->parseValue(tokens, i, compoundStack);
         i++;
         if (!entry) {
             LYNX_ERR << "Failed to parse value" << std::endl;
@@ -252,7 +252,7 @@ std::unordered_map<std::string, BuiltinCommand> builtins {
         std::vector<Token>& ifBlockToUse = condition ? ifBlock : elseBlock;
 
         int newI = 0;
-        ConfigEntry* result = parser->parseValue(ifBlockToUse, newI, compoundStack);
+        Ref<ConfigEntry> result = parser->parseValue(ifBlockToUse, newI, compoundStack);
         if (!result) {
             LYNX_ERR << "Failed to parse if block" << std::endl;
             return nullptr;
@@ -260,9 +260,9 @@ std::unordered_map<std::string, BuiltinCommand> builtins {
 
         return result;
     }),
-    std::pair("exists", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-        auto byPath = [](std::string value, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
-            ConfigEntry* entry = nullptr;
+    std::pair("exists", [](std::vector<Token> &tokens, int &i, Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack) -> Ref<ConfigEntry> {
+        auto byPath = [](std::string value, std::vector<CompoundEntry*>& compoundStack) -> Ref<ConfigEntry> {
+            Ref<ConfigEntry> entry = nullptr;
             for (size_t i = compoundStack.size(); i > 0 && !entry; i--) {
                 entry = compoundStack[i - 1]->getByPath(value);
             }
@@ -291,12 +291,31 @@ std::unordered_map<std::string, BuiltinCommand> builtins {
         
         i++;
         std::string path = makePath(tokens, i);
-        ConfigEntry* entry = byPath(path, compoundStack);
+        Ref<ConfigEntry> entry = byPath(path, compoundStack);
         
         bool condition = entry != nullptr;
         NumberEntry* result = new NumberEntry();
         result->setValue(condition ? 1 : 0);
         return result;
+    }),
+    std::pair("set", [](std::vector<Token> &tokens, int &i, Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack) -> Ref<ConfigEntry> {
+        i++;
+        if (i >= tokens.size() || tokens[i].type != Token::Identifier) {
+            LYNX_ERR << "Invalid set block: Expected identifier" << std::endl;
+            return nullptr;
+        }
+        std::string key = tokens[i].value;
+        i++;
+        Ref<ConfigEntry> entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse value" << std::endl;
+            return nullptr;
+        }
+        
+        entry = entry->clone();
+        entry->setKey(key);
+        compoundStack.back()->add(entry);
+        return entry;
     }),
 };
 
@@ -316,7 +335,7 @@ void recursiveDelete(std::string path) {
 };
 
 std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
-    std::pair("runshell", new NativeFunctionEntry({{"command", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("runshell", new NativeFunctionEntry({{"command", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* command = args->getString("command");
         if (!command) {
             std::cerr << "Failed to parse runshell block" << std::endl;
@@ -336,8 +355,8 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         entry->setValue(resultStr);
         return entry;
     })),
-    std::pair("print", new NativeFunctionEntry({{"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
-        ConfigEntry* result = args->get("value");
+    std::pair("print", new NativeFunctionEntry({{"value", Type::Any()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
+        Ref<ConfigEntry> result = args->get("value");
         if (!result) {
             std::cerr << "Failed to parse print block" << std::endl;
             return nullptr;
@@ -353,7 +372,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         }
         return result;
     })),
-    std::pair("use", new NativeFunctionEntry({{"file", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("use", new NativeFunctionEntry({{"file", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* result = args->getString("file");
         if (!result) {
             std::cerr << "Failed to parse use block" << std::endl;
@@ -372,8 +391,8 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         compoundStack.at(compoundStack.size() - 2)->merge(entry);
         return entry;
     })),
-    std::pair("printLn", new NativeFunctionEntry({{"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
-        ConfigEntry* result = args->get("value");
+    std::pair("printLn", new NativeFunctionEntry({{"value", Type::Any()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
+        Ref<ConfigEntry> result = args->get("value");
         if (!result) {
             std::cerr << "Failed to parse printLn block" << std::endl;
             return nullptr;
@@ -390,14 +409,14 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         std::cout << std::endl;
         return result;
     })),
-    std::pair("readLn", new NativeFunctionEntry({}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("readLn", new NativeFunctionEntry({}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         std::string line;
         std::getline(std::cin, line);
         StringEntry* entry = new StringEntry();
         entry->setValue(line);
         return entry;
     })),
-    std::pair("eq", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("eq", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         NumberEntry* entryA = args->getNumber("a");
         NumberEntry* entryB = args->getNumber("b");
         if (!entryA || !entryB) {
@@ -408,7 +427,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(entryA->getType() == entryB->getType() && entryA->operator==(*entryB) ? 1 : 0);
         return result;
     })),
-    std::pair("ne", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("ne", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         NumberEntry* entryA = args->getNumber("a");
         NumberEntry* entryB = args->getNumber("b");
         if (!entryA || !entryB) {
@@ -419,7 +438,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(entryA->getType() != entryB->getType() || entryA->operator!=(*entryB) ? 1 : 0);
         return result;
     })),
-    std::pair("string-length", new NativeFunctionEntry({{"value", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("string-length", new NativeFunctionEntry({{"value", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* entry = args->getString("value");
         if (!entry) {
             std::cerr << "Failed to parse string-length block" << std::endl;
@@ -429,7 +448,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(entry->getValue().length());
         return result;
     })),
-    std::pair("string-substring", new NativeFunctionEntry({{"string", Type::String()}, {"start", Type::Number()}, {"end", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("string-substring", new NativeFunctionEntry({{"string", Type::String()}, {"start", Type::Number()}, {"end", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* str = args->getString("string");
         NumberEntry* start = args->getNumber("start");
         NumberEntry* end = args->getNumber("end");
@@ -450,7 +469,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
     })),
 
 #define BINARY_OP(_name, _op) \
-    std::pair(_name, new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* { \
+    std::pair(_name, new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> { \
         NumberEntry* entryA = args->getNumber("a"); \
         NumberEntry* entryB = args->getNumber("b"); \
         if (!entryA || !entryB) { \
@@ -475,7 +494,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
 
 #undef BINARY_OP
 #define UNARY_OP(_name, _op) \
-    std::pair(_name, new NativeFunctionEntry({{"value", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* { \
+    std::pair(_name, new NativeFunctionEntry({{"value", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> { \
         NumberEntry* entry = args->getNumber("value"); \
         if (!entry) { \
             std::cerr << "Failed to parse " _name " block" << std::endl; \
@@ -493,7 +512,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
     UNARY_OP("not", !)
     
 #undef UNARY_OP
-    std::pair("mod", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("mod", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         NumberEntry* entryA = args->getNumber("a");
         NumberEntry* entryB = args->getNumber("b");
         if (!entryA || !entryB) {
@@ -504,7 +523,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(std::fmod(entryA->getValue(), entryB->getValue()));
         return result;
     })),
-    std::pair("shl", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("shl", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         NumberEntry* entryA = args->getNumber("a");
         NumberEntry* entryB = args->getNumber("b");
         if (!entryA || !entryB) {
@@ -515,7 +534,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue((long long) entryA->getValue() << (long long) entryB->getValue());
         return result;
     })),
-    std::pair("shr", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("shr", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         NumberEntry* entryA = args->getNumber("a");
         NumberEntry* entryB = args->getNumber("b");
         if (!entryA || !entryB) {
@@ -526,7 +545,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue((long long) entryA->getValue() >> (long long) entryB->getValue());
         return result;
     })),
-    std::pair("range", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("range", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         NumberEntry* entryA = args->getNumber("a");
         NumberEntry* entryB = args->getNumber("b");
         if (!entryA || !entryB) {
@@ -543,7 +562,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         }
         return result;
     })),
-    std::pair("list-length", new NativeFunctionEntry({{"list", Type::List(Type::Any())}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("list-length", new NativeFunctionEntry({{"list", Type::List(Type::Any())}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         ListEntry* list = args->getList("list");
         if (!list) {
             std::cerr << "Failed to parse list" << std::endl;
@@ -553,7 +572,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(list->size());
         return result;
     })),
-    std::pair("list-get", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"index", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("list-get", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"index", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         ListEntry* list = args->getList("list");
         if (!list) {
             std::cerr << "Failed to parse list" << std::endl;
@@ -571,7 +590,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         }
         return list->get(idx)->clone();
     })),
-    std::pair("list-set", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"index", Type::Number()}, {"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("list-set", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"index", Type::Number()}, {"value", Type::Any()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         ListEntry* list = args->getList("list");
         if (!list) {
             std::cerr << "Failed to parse list" << std::endl;
@@ -582,7 +601,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
             std::cerr << "Failed to parse index" << std::endl;
             return nullptr;
         }
-        ConfigEntry* value = args->get("value");
+        Ref<ConfigEntry> value = args->get("value");
         if (!value) {
             std::cerr << "Failed to parse value" << std::endl;
             return nullptr;
@@ -598,13 +617,13 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         }
         return list->get(idx) = value->clone();
     })),
-    std::pair("list-append", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("list-append", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"value", Type::Any()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         ListEntry* list = args->getList("list");
         if (!list) {
             std::cerr << "Failed to parse list" << std::endl;
             return nullptr;
         }
-        ConfigEntry* value = args->get("value");
+        Ref<ConfigEntry> value = args->get("value");
         if (!value) {
             std::cerr << "Failed to parse value" << std::endl;
             return nullptr;
@@ -616,7 +635,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         list->add(value->clone());
         return new StringEntry();
     })),
-    std::pair("list-remove", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"index", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("list-remove", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"index", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         ListEntry* list = args->getList("list");
         if (!list) {
             std::cerr << "Failed to parse list" << std::endl;
@@ -635,7 +654,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         list->remove(idx);
         return new StringEntry();
     })),
-    std::pair("inc", new NativeFunctionEntry({{"value", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("inc", new NativeFunctionEntry({{"value", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         NumberEntry* value = args->getNumber("value");
         if (!value) {
             std::cerr << "Failed to parse inc block" << std::endl;
@@ -645,7 +664,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(value->getValue() + 1);
         return result;
     })),
-    std::pair("dec", new NativeFunctionEntry({{"value", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("dec", new NativeFunctionEntry({{"value", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         NumberEntry* value = args->getNumber("value");
         if (!value) {
             std::cerr << "Failed to parse dec block" << std::endl;
@@ -655,7 +674,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(value->getValue() - 1);
         return result;
     })),
-    std::pair("exit", new NativeFunctionEntry({{"value", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("exit", new NativeFunctionEntry({{"value", Type::Number()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         NumberEntry* value = args->getNumber("value");
         if (!value) {
             std::cerr << "Failed to parse exit block" << std::endl;
@@ -665,7 +684,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         std::exit(exitCode);
         return new StringEntry();
     })),
-    std::pair("file-mkdir", new NativeFunctionEntry({{"path", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("file-mkdir", new NativeFunctionEntry({{"path", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* str = args->getString("path");
         if (!str) {
             std::cerr << "Failed to parse file-mkdir block" << std::endl;
@@ -689,7 +708,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         }
         return new StringEntry();
     })),
-    std::pair("file-rmdir", new NativeFunctionEntry({{"path", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("file-rmdir", new NativeFunctionEntry({{"path", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* str = args->getString("path");
         if (!str) {
             std::cerr << "Failed to parse file-rmdir block" << std::endl;
@@ -706,7 +725,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         recursiveDelete(str->getValue());
         return new StringEntry();
     })),
-    std::pair("file-remove", new NativeFunctionEntry({{"path", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("file-remove", new NativeFunctionEntry({{"path", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* str = args->getString("path");
         if (!str) {
             std::cerr << "Failed to parse file-remove block" << std::endl;
@@ -723,7 +742,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         std::filesystem::remove(str->getValue());
         return new StringEntry();
     })),
-    std::pair("file-write", new NativeFunctionEntry({{"path", Type::String()}, {"content", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("file-write", new NativeFunctionEntry({{"path", Type::String()}, {"content", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* path = args->getString("path");
         if (!path) {
             std::cerr << "Failed to parse file-write block" << std::endl;
@@ -763,7 +782,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(path->getValue());
         return result;
     })),
-    std::pair("file-read", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("file-read", new NativeFunctionEntry({{"filename", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* filename = args->getString("filename");
         if (!filename) {
             std::cerr << "Failed to parse file-read block" << std::endl;
@@ -788,7 +807,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(content);
         return result;
     })),
-    std::pair("file-exists", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("file-exists", new NativeFunctionEntry({{"filename", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* filename = args->getString("filename");
         if (!filename) {
             std::cerr << "Failed to parse file-exists block" << std::endl;
@@ -802,7 +821,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(std::filesystem::exists(filename->getValue()) ? 1 : 0);
         return result;
     })),
-    std::pair("file-isdir", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("file-isdir", new NativeFunctionEntry({{"filename", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* filename = args->getString("filename");
         if (!filename) {
             std::cerr << "Failed to parse file-isdir block" << std::endl;
@@ -816,7 +835,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(std::filesystem::is_directory(filename->getValue()) ? 1 : 0);
         return result;
     })),
-    std::pair("file-isfile", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("file-isfile", new NativeFunctionEntry({{"filename", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* filename = args->getString("filename");
         if (!filename) {
             std::cerr << "Failed to parse file-isfile block" << std::endl;
@@ -830,7 +849,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(std::filesystem::is_regular_file(filename->getValue()) ? 1 : 0);
         return result;
     })),
-    std::pair("file-dirname", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("file-dirname", new NativeFunctionEntry({{"filename", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* filename = args->getString("filename");
         if (!filename) {
             std::cerr << "Failed to parse file-dirname block" << std::endl;
@@ -844,7 +863,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(std::filesystem::path(filename->getValue()).parent_path().string());
         return result;
     })),
-    std::pair("file-basename", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("file-basename", new NativeFunctionEntry({{"filename", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* filename = args->getString("filename");
         if (!filename) {
             std::cerr << "Failed to parse file-basename block" << std::endl;
@@ -858,7 +877,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(std::filesystem::path(filename->getValue()).filename().string());
         return result;
     })),
-    std::pair("file-extname", new NativeFunctionEntry({{"filename", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+    std::pair("file-extname", new NativeFunctionEntry({{"filename", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
         StringEntry* filename = args->getString("filename");
         if (!filename) {
             std::cerr << "Failed to parse file-extname block" << std::endl;
@@ -872,8 +891,67 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(std::filesystem::path(filename->getValue()).extension().string());
         return result;
     })),
-    std::pair("printErr", new NativeFunctionEntry({{"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
-        ConfigEntry* result = args->get("value");
+    std::pair("file-copy", new NativeFunctionEntry({{"from", Type::String()}, {"to", Type::String()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
+        StringEntry* from = args->getString("from");
+        if (!from) {
+            std::cerr << "Failed to parse file-copy block" << std::endl;
+            return nullptr;
+        }
+        if (from->getValue().empty()) {
+            std::cerr << "Invalid from path in file-copy block" << std::endl;
+            return nullptr;
+        }
+        StringEntry* to = args->getString("to");
+        if (!to) {
+            std::cerr << "Failed to parse file-copy block" << std::endl;
+            return nullptr;
+        }
+        if (to->getValue().empty()) {
+            std::cerr << "Invalid to path in file-copy block" << std::endl;
+            return nullptr;
+        }
+        if (!std::filesystem::exists(from->getValue())) {
+            std::cerr << "Source file does not exist: " << from->getValue() << std::endl;
+            return nullptr;
+        }
+        if (std::filesystem::exists(to->getValue())) {
+            if (std::filesystem::is_directory(to->getValue())) {
+                std::cerr << "Destination path is a directory: " << to->getValue() << std::endl;
+                return nullptr;
+            } else {
+                if (!std::filesystem::remove(to->getValue())) {
+                    std::cerr << "Failed to remove existing file: " << to->getValue() << std::endl;
+                    return nullptr;
+                }
+            }
+        }
+        if (std::filesystem::is_directory(from->getValue())) {
+            std::cerr << "Source path is a directory: " << from->getValue() << std::endl;
+            return nullptr;
+        }
+        if (std::filesystem::exists(to->getValue())) {
+            std::cerr << "Destination path already exists: " << to->getValue() << std::endl;
+            return nullptr;
+        }
+        if (!std::filesystem::exists(std::filesystem::path(to->getValue()).parent_path())) {
+            std::filesystem::create_directories(std::filesystem::path(to->getValue()).parent_path());
+        }
+        if (!std::filesystem::exists(std::filesystem::path(to->getValue()).parent_path())) {
+            std::cerr << "Failed to create directory: " << std::filesystem::path(to->getValue()).parent_path() << std::endl;
+            return nullptr;
+        }
+        std::filesystem::copy(from->getValue(), to->getValue());
+        if (std::filesystem::exists(to->getValue())) {
+            StringEntry* result = new StringEntry();
+            result->setValue(to->getValue());
+            return result;
+        } else {
+            std::cerr << "Failed to copy file from " << from->getValue() << " to " << to->getValue() << std::endl;
+            return nullptr;
+        }
+    })),
+    std::pair("printErr", new NativeFunctionEntry({{"value", Type::Any()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
+        Ref<ConfigEntry> result = args->get("value");
         if (!result) {
             std::cerr << "Failed to parse printErr block" << std::endl;
             return nullptr;
@@ -889,8 +967,8 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         }
         return result;
     })),
-    std::pair("printErrLn", new NativeFunctionEntry({{"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
-        ConfigEntry* result = args->get("value");
+    std::pair("printErrLn", new NativeFunctionEntry({{"value", Type::Any()}}, [](Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> Ref<ConfigEntry> {
+        Ref<ConfigEntry> result = args->get("value");
         if (!result) {
             std::cerr << "Failed to parse printErrLn block" << std::endl;
             return nullptr;
@@ -909,7 +987,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
     })),
 };
 
-ConfigEntry* ConfigEntry::Null = nullptr;
+Ref<ConfigEntry> ConfigEntry::Null = nullptr;
 
 FunctionEntry::FunctionEntry() {
     this->setType(EntryType::Function);
@@ -951,7 +1029,7 @@ void FunctionEntry::print(std::ostream& stream, int indent) {
     stream << args;
     stream << ")" << std::endl;
 }
-ConfigEntry* FunctionEntry::clone() {
+Ref<ConfigEntry> FunctionEntry::clone() {
     FunctionEntry* newFunc = new FunctionEntry();
     newFunc->body = this->body;
     newFunc->args = this->args;
@@ -959,7 +1037,7 @@ ConfigEntry* FunctionEntry::clone() {
     return newFunc;
 }
 
-ConfigEntry* DeclaredFunctionEntry::clone() {
+Ref<ConfigEntry> DeclaredFunctionEntry::clone() {
     DeclaredFunctionEntry* newFunc = new DeclaredFunctionEntry();
     newFunc->body = this->body;
     newFunc->args = this->args;
@@ -973,12 +1051,12 @@ DeclaredFunctionEntry::DeclaredFunctionEntry() {
     this->isDotCallable = false;
 }
 
-ConfigEntry* FunctionEntry::call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) {
+Ref<ConfigEntry> FunctionEntry::call(Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) {
     int tmp = 0;
     CompoundEntry* args = new CompoundEntry();
     for (size_t n = 0; n < this->args.size(); n++) {
         i++;
-        ConfigEntry* arg = parser->parseValue(tokens, i, compoundStack);
+        Ref<ConfigEntry> arg = parser->parseValue(tokens, i, compoundStack);
         if (!arg) {
             LYNX_ERR << "Failed to parse argument '" << this->args[n].key << "'" << std::endl;
             return nullptr;
@@ -993,7 +1071,7 @@ ConfigEntry* FunctionEntry::call(ConfigParser* parser, std::vector<CompoundEntry
     }
     compoundStack.push_back(args);
     int x = 0;
-    ConfigEntry* result = parser->parseValue(this->body, x, compoundStack);
+    Ref<ConfigEntry> result = parser->parseValue(this->body, x, compoundStack);
     compoundStack.pop_back();
     if (!result) {
         LYNX_ERR << "Failed to run function" << std::endl;
@@ -1002,12 +1080,12 @@ ConfigEntry* FunctionEntry::call(ConfigParser* parser, std::vector<CompoundEntry
     return result;
 }
 
-ConfigEntry* DeclaredFunctionEntry::call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) {
+Ref<ConfigEntry> DeclaredFunctionEntry::call(Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) {
     int tmp = 0;
     CompoundEntry* args = new CompoundEntry();
     for (size_t n = 0; n < this->args.size(); n++) {
         i++;
-        ConfigEntry* arg = parser->parseValue(tokens, i, compoundStack);
+        Ref<ConfigEntry> arg = parser->parseValue(tokens, i, compoundStack);
         if (!arg) {
             LYNX_ERR << "Failed to parse argument '" << this->args[n].key << "'" << std::endl;
             return nullptr;
@@ -1022,7 +1100,7 @@ ConfigEntry* DeclaredFunctionEntry::call(ConfigParser* parser, std::vector<Compo
     }
     this->compoundStack.push_back(args);
     int x = 0;
-    ConfigEntry* result = parser->parseValue(this->body, x, this->compoundStack);
+    Ref<ConfigEntry> result = parser->parseValue(this->body, x, this->compoundStack);
     this->compoundStack.pop_back();
     if (!result) {
         LYNX_ERR << "Failed to run function" << std::endl;
@@ -1031,12 +1109,12 @@ ConfigEntry* DeclaredFunctionEntry::call(ConfigParser* parser, std::vector<Compo
     return result;
 }
 
-ConfigEntry* NativeFunctionEntry::call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) {
+Ref<ConfigEntry> NativeFunctionEntry::call(Ref<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) {
     int tmp = 0;
     CompoundEntry* args = new CompoundEntry();
     for (size_t n = 0; n < this->args.size(); n++) {
         i++;
-        ConfigEntry* arg = parser->parseValue(tokens, i, compoundStack);
+        Ref<ConfigEntry> arg = parser->parseValue(tokens, i, compoundStack);
         if (!arg) {
             LYNX_ERR << "Failed to parse argument '" << this->args[n].key << "'" << std::endl;
             return nullptr;
@@ -1050,7 +1128,7 @@ ConfigEntry* NativeFunctionEntry::call(ConfigParser* parser, std::vector<Compoun
         args->add(arg);
     }
     compoundStack.push_back(args);
-    ConfigEntry* result = this->func(parser, compoundStack, args);
+    Ref<ConfigEntry> result = this->func(parser, compoundStack, args);
     compoundStack.pop_back();
     if (!result) {
         LYNX_ERR << "Failed to run function" << std::endl;
@@ -1173,14 +1251,14 @@ ListEntry::ListEntry() {
     this->length = 0;
     this->capacity = 0;
 }
-ConfigEntry*& ListEntry::get(unsigned long index) {
+Ref<ConfigEntry>& ListEntry::get(unsigned long index) {
     if (index >= this->length) {
         std::cerr << "Index out of bounds" << std::endl;
         return ConfigEntry::Null;
     }
     return this->values[index];
 }
-ConfigEntry*& ListEntry::operator[](unsigned long index) {
+Ref<ConfigEntry>& ListEntry::operator[](unsigned long index) {
     return this->get(index);
 }
 StringEntry* ListEntry::getString(unsigned long index) {
@@ -1207,11 +1285,11 @@ ListEntry* ListEntry::getList(unsigned long index) {
 unsigned long ListEntry::size() {
     return this->length;
 }
-void ListEntry::add(ConfigEntry* value) {
+void ListEntry::add(Ref<ConfigEntry> value) {
     if (this->length >= this->capacity) {
         this->capacity = this->capacity ? this->capacity * 2 : 16;
         try { 
-            ConfigEntry** newValues = new ConfigEntry*[this->capacity];
+            Ref<ConfigEntry>* newValues = new Ref<ConfigEntry>[this->capacity];
             for (unsigned long i = 0; i < this->length; i++) {
                 newValues[i] = this->values[i];
             }
@@ -1337,7 +1415,7 @@ CompoundEntry* CompoundEntry::getCompound(const std::string& key) {
     }
     return nullptr;
 }
-ConfigEntry*& CompoundEntry::get(const std::string& key) {
+Ref<ConfigEntry>& CompoundEntry::get(const std::string& key) {
     for (unsigned long i = 0; i < this->length; i++) {
         if (this->entries[i]->getKey() == key) {
             return this->entries[i];
@@ -1345,7 +1423,7 @@ ConfigEntry*& CompoundEntry::get(const std::string& key) {
     }
     return ConfigEntry::Null;
 }
-ConfigEntry* CompoundEntry::getByPath(const std::string& path) {
+Ref<ConfigEntry> CompoundEntry::getByPath(const std::string& path) {
     std::string key = "";
     CompoundEntry* current = this;
     for (char c : path) {
@@ -1363,7 +1441,7 @@ ConfigEntry* CompoundEntry::getByPath(const std::string& path) {
     }
     return current->get(key);
 }
-ConfigEntry*& CompoundEntry::operator[](const std::string& key) {
+Ref<ConfigEntry>& CompoundEntry::operator[](const std::string& key) {
     return this->get(key);
 }
 void CompoundEntry::setString(const std::string& key, const std::string& value) {
@@ -1377,7 +1455,7 @@ void CompoundEntry::setString(const std::string& key, const std::string& value) 
     entry->setValue(value);
     add(entry);
 }
-void CompoundEntry::add(ConfigEntry* entry) {
+void CompoundEntry::add(Ref<ConfigEntry> entry) {
     for (unsigned long i = 0; i < this->length; i++) {
         if (this->entries[i]->getKey() == entry->getKey()) {
             this->entries[i] = entry;
@@ -1387,7 +1465,7 @@ void CompoundEntry::add(ConfigEntry* entry) {
     if (this->length >= this->capacity) {
         this->capacity = this->capacity ? this->capacity * 2 : 16;
         try { 
-            ConfigEntry** newEntries = new ConfigEntry*[this->capacity];
+            Ref<ConfigEntry>* newEntries = new Ref<ConfigEntry>[this->capacity];
             for (unsigned long i = 0; i < this->length; i++) {
                 newEntries[i] = this->entries[i];
             }
@@ -1411,7 +1489,7 @@ void CompoundEntry::addString(const std::string& key, const std::string& value) 
     newEntry->setValue(value);
     add(newEntry);
 }
-void CompoundEntry::addList(const std::string& key, const std::vector<ConfigEntry*>& value) {
+void CompoundEntry::addList(const std::string& key, const std::vector<Ref<ConfigEntry>>& value) {
     if (this->hasMember(key)) {
         std::cerr << "List with key '" << key << "' already exists!" << std::endl;
         return;
@@ -1423,7 +1501,7 @@ void CompoundEntry::addList(const std::string& key, const std::vector<ConfigEntr
     }
     add(newEntry);
 }
-void CompoundEntry::addList(const std::string& key, ConfigEntry* value) {
+void CompoundEntry::addList(const std::string& key, Ref<ConfigEntry> value) {
     if (this->hasMember(key)) {
         std::cerr << "List with key '" << key << "' already exists!" << std::endl;
         return;
@@ -1438,14 +1516,14 @@ void CompoundEntry::addList(ListEntry* value) {
         std::cerr << "List with key '" << value->getKey() << "' already exists!" << std::endl;
         return;
     }
-    add(reinterpret_cast<ConfigEntry*>(value));
+    add(reinterpret_cast<Ref<ConfigEntry>>(value));
 }
 void CompoundEntry::addCompound(CompoundEntry* value) {
     if (this->hasMember(value->getKey())) {
         std::cerr << "Compound with key '" << value->getKey() << "' already exists!" << std::endl;
         return;
     }
-    add(reinterpret_cast<ConfigEntry*>(value));
+    add(reinterpret_cast<Ref<ConfigEntry>>(value));
 }
 size_t CompoundEntry::merge(CompoundEntry* other) {
     size_t count = 0;
@@ -1667,21 +1745,21 @@ CompoundEntry* ConfigParser::parse(const std::string& configFile, std::vector<Co
     return rootEntry;
 }
 
-ConfigEntry* StringEntry::clone() {
+Ref<ConfigEntry> StringEntry::clone() {
     StringEntry* entry = new StringEntry();
     entry->setKey(this->getKey());
     entry->setValue(this->value);
     return entry;
 }
 
-ConfigEntry* NumberEntry::clone() {
+Ref<ConfigEntry> NumberEntry::clone() {
     NumberEntry* entry = new NumberEntry();
     entry->setKey(this->getKey());
     entry->setValue(this->value);
     return entry;
 }
 
-ConfigEntry* ListEntry::clone() {
+Ref<ConfigEntry> ListEntry::clone() {
     ListEntry* entry = new ListEntry();
     entry->setKey(this->getKey());
     entry->setListType(this->listType);
@@ -1689,14 +1767,14 @@ ConfigEntry* ListEntry::clone() {
     return entry;
 }
 
-ConfigEntry* CompoundEntry::clone() {
+Ref<ConfigEntry> CompoundEntry::clone() {
     CompoundEntry* entry = new CompoundEntry();
     entry->setKey(this->getKey());
     entry->merge(this);
     return entry;
 }
 
-bool Type::validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out) {
+bool Type::validate(Ref<ConfigEntry> what, const std::vector<std::string>& flags, std::ostream& out) {
     bool hasError = false;
 
     bool optional = this->isOptional || std::find(flags.begin(), flags.end(), "optional") != flags.end();
@@ -1824,8 +1902,8 @@ bool Type::operator!=(const Type& other) const {
     return !operator==(other);
 }
 
-Type* Type::clone() {
-    Type* t = new Type();
+Ref<Type> Type::clone() {
+    Ref<Type> t = new Type();
     t->type = this->type;
     if (this->listType) t->listType = this->listType->clone();
     if (this->compoundTypes) {
@@ -1843,27 +1921,27 @@ bool Type::CompoundType::operator!=(const Type::CompoundType& other) const {
     return !operator==(other);
 }
 
-Type* Type::String() {
-    Type* type = new Type();
+Ref<Type> Type::String() {
+    Ref<Type> type = new Type();
     type->type = EntryType::String;
     return type;
 }
 
-Type* Type::Number() {
-    Type* type = new Type();
+Ref<Type> Type::Number() {
+    Ref<Type> type = new Type();
     type->type = EntryType::Number;
     return type;
 }
 
-Type* Type::List(Type* type) {
-    Type* t = new Type();
+Ref<Type> Type::List(Ref<Type> type) {
+    Ref<Type> t = new Type();
     t->type = EntryType::List;
     t->listType = type;
     return t;
 }
 
-Type* Type::Compound(std::vector<CompoundType> types) {
-    Type* type = new Type();
+Ref<Type> Type::Compound(std::vector<CompoundType> types) {
+    Ref<Type> type = new Type();
     type->type = EntryType::Compound;
     type->compoundTypes = new std::vector<CompoundType>();
     for (const auto& compoundType : types) {
@@ -1872,23 +1950,23 @@ Type* Type::Compound(std::vector<CompoundType> types) {
     return type;
 }
 
-Type* Type::Function(std::vector<CompoundType> types) {
-    Type* type = Type::Compound(types);
+Ref<Type> Type::Function(std::vector<CompoundType> types) {
+    Ref<Type> type = Type::Compound(types);
     type->type = EntryType::Function;
     return type;
 }
 
-Type* Type::Optional(Type* type) {
-    Type* t = type->clone();
+Ref<Type> Type::Optional(Ref<Type> type) {
+    Ref<Type> t = type->clone();
     t->isOptional = true;
     return t;
 }
 
-Type* Type::Any() {
+Ref<Type> Type::Any() {
     return new AnyType();
 }
 
-bool AnyType::validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out) {
+bool AnyType::validate(Ref<ConfigEntry> what, const std::vector<std::string>& flags, std::ostream& out) {
     return true;
 }
 
@@ -1908,7 +1986,7 @@ TypeEntry::TypeEntry() {
     this->setType(EntryType::Type);
 }
 
-bool TypeEntry::validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out) {
+bool TypeEntry::validate(Ref<ConfigEntry> what, const std::vector<std::string>& flags, std::ostream& out) {
     return type->validate(what, flags, out);
 }
 
@@ -1932,8 +2010,8 @@ void TypeEntry::print(std::ostream& stream, int indent) {
     stream << "type " << this->type->type << std::endl;
 }
 
-ConfigEntry* TypeEntry::clone() {
-    TypeEntry* entry = new TypeEntry();
+Ref<ConfigEntry> TypeEntry::clone() {
+    Ref<TypeEntry> entry = new TypeEntry();
     entry->setKey(this->getKey());
     entry->type = this->type->clone();
     return entry;
@@ -1947,7 +2025,7 @@ ListEntry* ConfigParser::parseList(std::vector<Token>& tokens, int& i, std::vect
     }
     i++;
     while (i < tokens.size() && tokens[i].type != Token::ListEnd) {
-        ConfigEntry* entry = this->parseValue(tokens, i, compoundStack);
+        Ref<ConfigEntry> entry = this->parseValue(tokens, i, compoundStack);
         if (!entry) {
             LYNX_ERR << "Failed to parse value" << std::endl;
             return nullptr;
@@ -1965,7 +2043,7 @@ ListEntry* ConfigParser::parseList(std::vector<Token>& tokens, int& i, std::vect
     return list;
 }
 
-bool sumEntries(ConfigEntry* finalEntry, ConfigEntry* entry) {
+bool sumEntries(Ref<ConfigEntry> finalEntry, Ref<ConfigEntry> entry) {
     switch (entry->getType()) {
         case EntryType::String:
             ((StringEntry*) finalEntry)->setValue(((StringEntry*) finalEntry)->getValue() + ((StringEntry*) entry)->getValue());
@@ -1986,10 +2064,10 @@ bool sumEntries(ConfigEntry* finalEntry, ConfigEntry* entry) {
     return true;
 }
 
-ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack) {
-    auto byPath = [&i, &compoundStack](std::string value, ConfigEntry** pParent) -> ConfigEntry* {
-        ConfigEntry* entry = nullptr;
-        ConfigEntry* parent = nullptr;
+Ref<ConfigEntry> ConfigParser::parseValue(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack) {
+    auto byPath = [&i, &compoundStack](std::string value, Ref<ConfigEntry>* pParent) -> Ref<ConfigEntry> {
+        Ref<ConfigEntry> entry = nullptr;
+        Ref<ConfigEntry> parent = nullptr;
         size_t x = value.find_last_of('.');
         std::string parentPath = value.substr(0, x);
         for (size_t i = compoundStack.size(); i > 0 && !entry; i--) {
@@ -2053,8 +2131,8 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i, std::v
                 if (path.empty()) {
                     return nullptr;
                 }
-                ConfigEntry* parent = nullptr;
-                ConfigEntry* entry;
+                Ref<ConfigEntry> parent = nullptr;
+                Ref<ConfigEntry> entry;
                 auto nativeFunc = nativeFunctions.find(tokens[i].value);
                 if (nativeFunc != nativeFunctions.end()) {
                     entry = nativeFunc->second;
@@ -2071,12 +2149,12 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i, std::v
                     return entry;
                 }
             }
-            ConfigEntry* entry = x->second(tokens, i, this, compoundStack);
+            Ref<ConfigEntry> entry = x->second(tokens, i, this, compoundStack);
             return entry;
         }
         case Token::BlockStart: {
             i++;
-            ConfigEntry* finalEntry = parseValue(tokens, i, compoundStack);
+            Ref<ConfigEntry> finalEntry = parseValue(tokens, i, compoundStack);
             if (!finalEntry) {
                 LYNX_ERR << "Failed to parse value" << std::endl;
                 return nullptr;
@@ -2084,7 +2162,7 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i, std::v
             i++;
 
             while (i < tokens.size() && tokens[i].type != Token::BlockEnd) {
-                ConfigEntry* entry = parseValue(tokens, i, compoundStack);
+                Ref<ConfigEntry> entry = parseValue(tokens, i, compoundStack);
                 i++;
                 if (!entry) {
                     LYNX_ERR << "Failed to parse value" << std::endl;
@@ -2128,9 +2206,9 @@ ConfigEntry* ConfigParser::parseValue(std::vector<Token>& tokens, int& i, std::v
     }
 }
 
-Type* ConfigParser::parseType(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack) {
-    auto byPath = [&i, &compoundStack](std::string value) -> ConfigEntry* {
-        ConfigEntry* entry = nullptr;
+Ref<Type> ConfigParser::parseType(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack) {
+    auto byPath = [&i, &compoundStack](std::string value) -> Ref<ConfigEntry> {
+        Ref<ConfigEntry> entry = nullptr;
         for (size_t i = compoundStack.size(); i > 0 && !entry; i--) {
             entry = compoundStack[i - 1]->getByPath(value);
         }
@@ -2155,7 +2233,7 @@ Type* ConfigParser::parseType(std::vector<Token>& tokens, int& i, std::vector<Co
         i--;
         return path;
     };
-    Type* t = new Type();
+    Ref<Type> t = new Type();
     if (i >= tokens.size() || tokens[i].type != Token::Identifier) {
         LYNX_ERR << "Invalid type: " << tokens[i].value << std::endl;
         return nullptr;
@@ -2194,7 +2272,7 @@ Type* ConfigParser::parseType(std::vector<Token>& tokens, int& i, std::vector<Co
         t->compoundTypes = parseCompoundTypes(tokens, i, compoundStack);
     } else {
         std::string path = makePath(tokens, i);
-        ConfigEntry* typeEntry = byPath(path);
+        Ref<ConfigEntry> typeEntry = byPath(path);
         if (!typeEntry) {
             LYNX_ERR << "Failed to find entry by path '" << path << "'" << std::endl;
             return nullptr;
@@ -2203,14 +2281,14 @@ Type* ConfigParser::parseType(std::vector<Token>& tokens, int& i, std::vector<Co
             LYNX_ERR << "Invalid entry type. Expected Type but got " << typeEntry->getType() << std::endl;
             return nullptr;
         }
-        TypeEntry* entry = (TypeEntry*) typeEntry;
+        Ref<TypeEntry> entry = (Ref<TypeEntry>) typeEntry;
         t = entry->type;
     }
     return t;
 }
 
-ConfigEntry* typeToEntry(Type* type) {
-    TypeEntry* typeEntry = new TypeEntry();
+Ref<ConfigEntry> typeToEntry(Ref<Type> type) {
+    Ref<TypeEntry> typeEntry = new TypeEntry();
     typeEntry->type = type;
     return typeEntry;
 }
@@ -2238,7 +2316,7 @@ std::vector<Type::CompoundType>* ConfigParser::parseCompoundTypes(std::vector<To
         }
         i++;
         
-        Type* type = parseType(tokens, i, compoundStack);
+        Ref<Type> type = parseType(tokens, i, compoundStack);
         if (!type) {
             LYNX_ERR << "Failed to parse type for key '" << key << "'" << std::endl;
             compoundStack.pop_back();
@@ -2267,7 +2345,7 @@ CompoundEntry* ConfigParser::parseCompound(std::vector<Token>& tokens, int& i, s
     while (i < tokens.size() && tokens[i].type != Token::CompoundEnd) {
         if (tokens[i].type == Token::BlockStart) {
             i++;
-            ConfigEntry* entry = parseValue(tokens, i, compoundStack);
+            Ref<ConfigEntry> entry = parseValue(tokens, i, compoundStack);
             if (!entry) {
                 LYNX_ERR << "Failed to parse value for merge" << std::endl;
                 compoundStack.pop_back();
@@ -2291,16 +2369,16 @@ CompoundEntry* ConfigParser::parseCompound(std::vector<Token>& tokens, int& i, s
         i++;
         if (i < tokens.size() && tokens[i].type == Token::Is) {
             i++;
-            Type* type = parseType(tokens, i, compoundStack);
+            Ref<Type> type = parseType(tokens, i, compoundStack);
             if (!type) {
                 LYNX_ERR << "Failed to parse type for key '" << key << "'" << std::endl;
                 compoundStack.pop_back();
                 return nullptr;
             }
 
-            ConfigEntry* entry = typeToEntry(type);
+            Ref<ConfigEntry> entry = typeToEntry(type);
             entry->setKey(key);
-            ConfigEntry* current = compound->get(key);
+            Ref<ConfigEntry> current = compound->get(key);
             if (current && current->getType() == EntryType::Type) {
                 LYNX_ERR << "Type entry already exists for key '" << key << "'" << std::endl;
                 compoundStack.pop_back();
@@ -2320,7 +2398,7 @@ CompoundEntry* ConfigParser::parseCompound(std::vector<Token>& tokens, int& i, s
         }
         i++;
         
-        ConfigEntry* entry = parseValue(tokens, i, compoundStack);
+        Ref<ConfigEntry> entry = parseValue(tokens, i, compoundStack);
         if (!entry) {
             LYNX_ERR << "Failed to parse value for key '" << key << "'" << std::endl;
             compoundStack.pop_back();
@@ -2328,9 +2406,9 @@ CompoundEntry* ConfigParser::parseCompound(std::vector<Token>& tokens, int& i, s
         }
         
         entry->setKey(key);
-        ConfigEntry* current = compound->get(key);
+        Ref<ConfigEntry> current = compound->get(key);
         if (current && current->getType() == EntryType::Type) {
-            TypeEntry* typeEntry = (TypeEntry*) current;
+            Ref<TypeEntry> typeEntry = current.cast<TypeEntry>();
             if (!typeEntry->validate(entry, {}, std::cerr)) {
                 LYNX_ERR << "Invalid entry type for key '" << key << "'" << std::endl;
                 compoundStack.pop_back();

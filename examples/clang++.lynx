@@ -15,7 +15,7 @@ ClangArgs: compound {
 }
 
 compile = func(what: ClangArgs) (
-    if exists what.output   (
+    if exists what.output (
         if file-exists file-dirname what.output (
             if file-isdir file-dirname what.output (
                 file-rmdir file-dirname what.output
