@@ -19,19 +19,3 @@ clang: ClangArgs = {
 (compile clang)
 
 (printLn "Lynx built successfully.")
-
-foo = {
-    (set x ({
-        (set y ({
-            (set z (
-                ("Hello, world!")
-            ))
-        }))
-    }))
-    (printLn x)
-    x = {
-        y = {
-            z = "Hello, world!"
-        }
-    }
-}
