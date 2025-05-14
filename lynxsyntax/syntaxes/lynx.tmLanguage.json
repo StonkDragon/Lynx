@@ -27,7 +27,7 @@
 				"match": "\\b(add|sub|mul|div|mod|inc|dec|shl|shr|eq|ne|gt|lt|ge|le|or|and|not)\\b"
 			},{
 				"name": "keyword.control",
-				"match": "\\b(optional|compound|list|string|number)\\b"
+				"match": "\\b(optional|compound|list|string|number|any)\\b"
 			},{
 				"name": "keyword.control",
 				"match": "\\b(true|false)\\b"

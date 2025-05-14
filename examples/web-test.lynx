@@ -1,0 +1,5 @@
+(use "web.lynx")
+
+(Web.download "https://raw.githubusercontent.com/StonkDragon/Lynx/refs/heads/main/examples/hello.lynx" "temp.lynx")
+(print file-read "temp.lynx")
+(file-remove "temp.lynx")

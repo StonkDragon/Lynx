@@ -1,12 +1,23 @@
 -- Lynx is capable of building itself:
 -- $ lynx build.lynx
 
-(use "examples/clang++.lynx")
+(use "compilers/clang++.lynx")
 
-clang: ClangArgs = {
+config: ClangArgs = {
     files = [
-        "src/tool/Lynx.cpp"
+        "src/Builtins.cpp"
+        "src/CompoundEntry.cpp"
+        "src/ConfigEntry.cpp"
+        "src/ConfigParser.cpp"
+        "src/FunctionEntry.cpp"
+        "src/ListEntry.cpp"
         "src/LynxConf.cpp"
+        "src/NativeFunctions.cpp"
+        "src/NumberEntry.cpp"
+        "src/StringEntry.cpp"
+        "src/Tokenizer.cpp"
+        "src/Main.cpp"
+        "src/Type.cpp"
     ]
     include = [
         "include"
@@ -16,6 +27,4 @@ clang: ClangArgs = {
     optimize = "3"
 }
 
-(compile clang)
-
-(printLn "Lynx built successfully.")
+(Clang.compile config)

@@ -487,11 +487,6 @@ struct Type {
     static Type* Any();
 };
 
-struct AnyType: public Type {
-    AnyType();
-    bool validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out = std::cout) override;
-};
-
 struct ConfigParser;
 
 struct FunctionEntry : public ConfigEntry {
@@ -500,6 +495,7 @@ struct FunctionEntry : public ConfigEntry {
     bool isDotCallable;
 
     FunctionEntry();
+    CompoundEntry* parseArgs(ConfigParser* parser, std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
     bool operator==(const ConfigEntry& other) override;
     bool operator!=(const ConfigEntry& other) override;
     void print(std::ostream& stream, int indent = 0) override;

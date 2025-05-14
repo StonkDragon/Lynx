@@ -1,0 +1,5 @@
+Web = {
+    fetch = func(url: string) (runshell ("curl -s \"" url "\""))
+    post = func(url: string data: string) (runshell ("curl -s -X POST -d \"" data "\" \"" url "\""))
+    download = func(url: string output: string) (runshell ("curl -s -o \"" output "\" -w \"%{http_code}\" \"" url "\""))
+}
