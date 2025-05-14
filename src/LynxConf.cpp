@@ -379,6 +379,18 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
             return nullptr;
         }
         std::string file = result->getValue();
+        if (!std::filesystem::exists(file)) {
+            std::filesystem::path p(file);
+            if (p.is_relative()) {
+                file = std::filesystem::path(".lynx") / p;
+            }
+        }
+
+        if (!std::filesystem::exists(file)) {
+            std::cerr << "File '" << file << "' does not exist" << std::endl;
+            return nullptr;
+        }
+
         CompoundEntry* entry = parser->parse(file, compoundStack);
         if (!entry) {
             std::cerr << "Failed to parse file '" << file << "'" << std::endl;
