@@ -19,51 +19,7 @@ typedef unsigned long u_long;
 #define LYNX_RT_ERR_TO(_sink) _sink << "[Lynx Config] "
 
 template <typename T>
-class Ref {
-    T* data;
-    long* refcount;
-
-    void retain() {
-        if (!refcount) {
-            return;
-        }
-        (*refcount)++;
-    }
-
-    void release() {
-        if (!refcount) {
-            return;
-        }
-        if (((*refcount)--) == 1) {
-            if (data) {
-                delete data;
-            }
-            delete refcount;
-        }
-    }
-
-public:
-    Ref() : data(nullptr), refcount(nullptr) {}
-    Ref(T* x) : data(x), refcount(new long(1)) {}
-    Ref(Ref& x) {
-        this->data = x.data;
-        this->refcount = x.refcount;
-        retain();
-    }
-
-    Ref& operator=(T* x) {
-        release();
-        this->data = x;
-        this->refcount = new long(1);
-        return *this;
-    }
-    Ref& operator=(Ref& x) {
-        this->data = x.data;
-        this->refcount = x.refcount;
-        retain();
-        return *this;
-    }
-};
+using Ptr = T*;
 
 enum class EntryType {
     Invalid,
@@ -84,7 +40,7 @@ private:
     EntryType type;
 
 public:
-    static std::shared_ptr<ConfigEntry> Null;
+    static ConfigEntry* Null;
 
     /**
      * Returns the key of this entry.
@@ -108,7 +64,7 @@ public:
      * Creates a copy of this entry.
      * @return A copy of this entry.
      */
-    virtual std::shared_ptr<ConfigEntry> clone() = 0;
+    virtual ConfigEntry* clone() = 0;
     /**
      * Compares this entry with another entry.
      */
@@ -153,7 +109,7 @@ public:
      * Creates a copy of this entry.
      * @return A copy of this entry.
      */
-    std::shared_ptr<ConfigEntry> clone() override;
+    ConfigEntry* clone() override;
     /**
      * Compares this entry with another entry.
      * @param other The entry to compare with.
@@ -197,7 +153,7 @@ public:
      * Creates a copy of this entry.
      * @return A copy of this entry.
      */
-    std::shared_ptr<ConfigEntry> clone() override;
+    ConfigEntry* clone() override;
     /**
      * Compares this entry with another entry.
      * @param other The entry to compare with.
@@ -222,7 +178,7 @@ struct CompoundEntry;
 
 struct ListEntry : public ConfigEntry {
 private:
-    std::shared_ptr<ConfigEntry>* values;
+    ConfigEntry** values;
     unsigned long length;
     unsigned long capacity;
     EntryType listType = EntryType::Invalid;
@@ -237,13 +193,13 @@ public:
      * @param index The index of the value to get.
      * @return The value at the specified index.
      */
-    std::shared_ptr<ConfigEntry>& get(unsigned long index);
+    ConfigEntry*& get(unsigned long index);
     /**
      * Returns the value at the specified index.
      * @param index The index of the value to get.
      * @return The value at the specified index.
      */
-    std::shared_ptr<ConfigEntry>& operator[](unsigned long index);
+    ConfigEntry*& operator[](unsigned long index);
     /**
      * Returns the string value at the specified index.
      * @param index The index of the value to get.
@@ -270,7 +226,7 @@ public:
      * Adds a value to the list.
      * @param value The value to add.
      */
-    void add(std::shared_ptr<ConfigEntry> value);
+    void add(ConfigEntry* value);
     /**
      * Removes the value at the specified index.
      * @param index The index of the value to remove.
@@ -303,7 +259,7 @@ public:
      * Creates a copy of this entry.
      * @return A copy of this entry.
      */
-    std::shared_ptr<ConfigEntry> clone() override;
+    ConfigEntry* clone() override;
     /**
      * Compares this entry with another entry.
      * @param other The entry to compare with.
@@ -326,7 +282,7 @@ public:
 
 struct CompoundEntry : public ConfigEntry {
 private:
-    std::shared_ptr<ConfigEntry>* entries;
+    ConfigEntry** entries;
     unsigned long length;
     unsigned long capacity;
 
@@ -346,19 +302,19 @@ public:
      * @param key The key of the entry to get.
      * @return The entry with the specified key.
      */
-    std::shared_ptr<ConfigEntry>& get(const std::string& key);
+    ConfigEntry*& get(const std::string& key);
     /**
      * Returns the entry with the specified dot-separated path.
      * @param path The path of the entry to get.
      * @return The entry with the specified path.
      */
-    std::shared_ptr<ConfigEntry> getByPath(const std::string& path);
+    ConfigEntry* getByPath(const std::string& path);
     /**
      * Returns the entry with the specified key.
      * @param key The key of the entry to get.
      * @return The entry with the specified key.
      */
-    std::shared_ptr<ConfigEntry>& operator[](const std::string& key);
+    ConfigEntry*& operator[](const std::string& key);
     /**
      * Returns the string entry with the specified key.
      * @param key The key of the entry to get.
@@ -395,7 +351,7 @@ public:
      * If an entry with the same key already exists, it will be replaced.
      * @param entry The entry to add.
      */
-    void add(std::shared_ptr<ConfigEntry> entry);
+    void add(ConfigEntry* entry);
     /**
      * Sets the string entry with the specified key.
      * @param key The key of the entry to set.
@@ -413,13 +369,13 @@ public:
      * @param key The key of the entry to add.
      * @param value The value to add.
      */
-    void addList(const std::string& key, const std::vector<std::shared_ptr<ConfigEntry>>& value);
+    void addList(const std::string& key, const std::vector<ConfigEntry*>& value);
     /**
      * Adds a list entry with the specified key.
      * @param key The key of the entry to add.
      * @param value The value to add.
      */
-    void addList(const std::string& key, std::shared_ptr<ConfigEntry> value);
+    void addList(const std::string& key, ConfigEntry* value);
     /**
      * Adds a list entry with the specified key.
      * @param key The key of the entry to add.
@@ -456,7 +412,7 @@ public:
      * Creates a copy of this entry.
      * @return A copy of this entry.
      */
-    std::shared_ptr<ConfigEntry> clone() override;
+    ConfigEntry* clone() override;
     /**
      * Compares this entry with another entry.
      * @param other The entry to compare with.
@@ -505,35 +461,35 @@ struct Token {
 struct Type {
     struct CompoundType {
         std::string key;
-        std::shared_ptr<Type> type;
+        Type* type;
 
         bool operator==(const CompoundType& other) const;
         bool operator!=(const CompoundType& other) const;
     };
     
     EntryType type;
-    std::shared_ptr<Type> listType;
+    Type* listType;
     std::vector<CompoundType>* compoundTypes;
     bool isOptional = false;
 
-    virtual bool validate(std::shared_ptr<ConfigEntry> what, const std::vector<std::string>& flags, std::ostream& out = std::cout);
-    std::shared_ptr<Type> clone();
+    virtual bool validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out = std::cout);
+    Type* clone();
     bool operator==(const Type& other) const;
     bool operator!=(const Type& other) const;
     std::string toString() const;
 
-    static std::shared_ptr<Type> String();
-    static std::shared_ptr<Type> Number();
-    static std::shared_ptr<Type> List(std::shared_ptr<Type> type);
-    static std::shared_ptr<Type> Compound(std::vector<CompoundType> types);
-    static std::shared_ptr<Type> Function(std::vector<CompoundType> types);
-    static std::shared_ptr<Type> Optional(std::shared_ptr<Type> type);
-    static std::shared_ptr<Type> Any();
+    static Type* String();
+    static Type* Number();
+    static Type* List(Type* type);
+    static Type* Compound(std::vector<CompoundType> types);
+    static Type* Function(std::vector<CompoundType> types);
+    static Type* Optional(Type* type);
+    static Type* Any();
 };
 
 struct AnyType: public Type {
     AnyType();
-    bool validate(std::shared_ptr<ConfigEntry> what, const std::vector<std::string>& flags, std::ostream& out = std::cout) override;
+    bool validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out = std::cout) override;
 };
 
 struct ConfigParser;
@@ -547,30 +503,30 @@ struct FunctionEntry : public ConfigEntry {
     bool operator==(const ConfigEntry& other) override;
     bool operator!=(const ConfigEntry& other) override;
     void print(std::ostream& stream, int indent = 0) override;
-    std::shared_ptr<ConfigEntry> clone() override;
-    virtual std::shared_ptr<ConfigEntry> call(std::shared_ptr<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i);
+    ConfigEntry* clone() override;
+    virtual ConfigEntry* call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i);
 };
 
 struct DeclaredFunctionEntry : public FunctionEntry {
     std::vector<CompoundEntry*> compoundStack;
 
     DeclaredFunctionEntry();
-    std::shared_ptr<ConfigEntry> clone() override;
-    std::shared_ptr<ConfigEntry> call(std::shared_ptr<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) override;
+    ConfigEntry* clone() override;
+    ConfigEntry* call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) override;
 };
 
 struct TypeEntry : public ConfigEntry {
-    std::shared_ptr<Type> type;
+    Type* type;
 
     TypeEntry();
-    bool validate(std::shared_ptr<ConfigEntry> what, const std::vector<std::string>& flags, std::ostream& out = std::cout);
+    bool validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out = std::cout);
     bool operator==(const ConfigEntry& other) override;
     bool operator!=(const ConfigEntry& other) override;
     void print(std::ostream& stream, int indent = 0) override;
-    std::shared_ptr<ConfigEntry> clone() override;
+    ConfigEntry* clone() override;
 };
 
-using BuiltinCommand = std::function<std::shared_ptr<ConfigEntry>(std::vector<Token>&, int&, std::shared_ptr<ConfigParser>, std::vector<CompoundEntry*>&)>;
+using BuiltinCommand = std::function<ConfigEntry*(std::vector<Token>&, int&, ConfigParser*, std::vector<CompoundEntry*>&)>;
 
 struct ConfigParser {
     /**
@@ -580,16 +536,16 @@ struct ConfigParser {
      */
     CompoundEntry* parse(const std::string& configFile);
     CompoundEntry* parse(const std::string& configFile, std::vector<CompoundEntry*>& compoundStack);
-    std::shared_ptr<Type> parseType(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
+    Type* parseType(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
     std::vector<Type::CompoundType>* parseCompoundTypes(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
     CompoundEntry* parseCompound(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
     ListEntry* parseList(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
-    std::shared_ptr<ConfigEntry> parseValue(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
+    ConfigEntry* parseValue(std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
 };
 
 struct NativeFunctionEntry : public FunctionEntry {
-    std::function<std::shared_ptr<ConfigEntry>(std::shared_ptr<ConfigParser>, std::vector<CompoundEntry*>&, CompoundEntry* args)> func;
+    std::function<ConfigEntry*(ConfigParser*, std::vector<CompoundEntry*>&, CompoundEntry* args)> func;
 
     NativeFunctionEntry(std::vector<Type::CompoundType> args, typeof(func) func);
-    virtual std::shared_ptr<ConfigEntry> call(std::shared_ptr<ConfigParser> parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) override;
+    virtual ConfigEntry* call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i) override;
 };
