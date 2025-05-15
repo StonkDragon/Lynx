@@ -1,0 +1,9 @@
+x = switch (os-name) (
+    "Windows" = "Windows"
+    "Linux" = "Linux"
+    "Mac OS X" = "macOS"
+    else = "Unknown/Other OS"
+)
+
+(printLn ("OS: " x))
+(printLn os-arch)

@@ -115,9 +115,9 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         entry->setValue(line);
         return ((ConfigEntry*) entry);
     })),
-    std::pair("eq", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
-        NumberEntry* entryA = args->getNumber("a");
-        NumberEntry* entryB = args->getNumber("b");
+    std::pair("eq", new NativeFunctionEntry({{"a", Type::Any()}, {"b", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        ConfigEntry* entryA = args->get("a");
+        ConfigEntry* entryB = args->get("b");
         if (!entryA || !entryB) {
             std::cerr << "Failed to parse eq block" << std::endl;
             return nullptr;
@@ -126,15 +126,15 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         result->setValue(entryA->getType() == entryB->getType() && entryA->operator==(*entryB) ? 1 : 0);
         return ((ConfigEntry*) result);
     })),
-    std::pair("ne", new NativeFunctionEntry({{"a", Type::Number()}, {"b", Type::Number()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
-        NumberEntry* entryA = args->getNumber("a");
-        NumberEntry* entryB = args->getNumber("b");
+    std::pair("ne", new NativeFunctionEntry({{"a", Type::Any()}, {"b", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        ConfigEntry* entryA = args->get("a");
+        ConfigEntry* entryB = args->get("b");
         if (!entryA || !entryB) {
             std::cerr << "Failed to parse ne block" << std::endl;
             return nullptr;
         }
         NumberEntry* result = new NumberEntry();
-        result->setValue(entryA->getType() != entryB->getType() || entryA->operator!=(*entryB) ? 1 : 0);
+        result->setValue(entryA->getType() != entryB->getType() || !entryA->operator==(*entryB) ? 1 : 0);
         return ((ConfigEntry*) result);
     })),
     std::pair("string-length", new NativeFunctionEntry({{"value", Type::String()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
@@ -683,5 +683,42 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
         }
         std::cerr << std::endl;
         return result;
+    })),
+    std::pair("ignore", new NativeFunctionEntry({{"_", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        return new StringEntry();
+    })),
+    std::pair("os-name", new NativeFunctionEntry({}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        #ifdef _WIN32
+            const char osName[] = "Windows";
+        #elif __APPLE__ || __MACH__
+            const char osName[] = "Mac OS X";
+        #elif __linux__
+            const char osName[] = "Linux";
+        #elif __unix__ // all unices not caught above
+            const char osName[] = "Unix";
+        #elif defined(_POSIX_VERSION)
+            const char osName[] = "POSIX";
+        #else
+            const char osName[] = "Unknown";
+        #endif
+        StringEntry* result = new StringEntry();
+        result->setValue(std::string(osName));
+        return ((ConfigEntry*) result);
+    })),
+    std::pair("os-arch", new NativeFunctionEntry({}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
+        #if defined(__x86_64__) || defined(_M_X64)
+            const char osArch[] = "x86_64";
+        #elif defined(__i386__) || defined(_M_IX86)
+            const char osArch[] = "x86";
+        #elif defined(__aarch64__)
+            const char osArch[] = "ARM64";
+        #elif defined(__arm__)
+            const char osArch[] = "ARM";
+        #else
+            const char osArch[] = "Unknown";
+        #endif
+        StringEntry* result = new StringEntry();
+        result->setValue(std::string(osArch));
+        return ((ConfigEntry*) result);
     })),
 };

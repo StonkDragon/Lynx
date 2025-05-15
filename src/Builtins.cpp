@@ -223,6 +223,108 @@ std::unordered_map<std::string, BuiltinCommand> builtins {
 
         return result;
     }),
+    std::pair("switch", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
+        i++;
+        ConfigEntry* entry = parser->parseValue(tokens, i, compoundStack);
+        if (!entry) {
+            LYNX_ERR << "Failed to parse value" << std::endl;
+            return nullptr;
+        }
+        
+        i++;
+        if (i >= tokens.size() || tokens[i].type != Token::BlockStart) {
+            LYNX_ERR << "Invalid switch block: Expected block start" << std::endl;
+            return nullptr;
+        }
+        i++;
+        std::vector<std::pair<ConfigEntry*, std::vector<Token>>> cases;
+        // Parse cases
+        /**
+         * switch <expr> (
+         *  <expr> = <expr> // case
+         *  <expr> = <expr> // case
+         *  else = <expr> // default case, optional
+         * )
+         */
+        // <expr> can be a number, string, identifier, or block
+        while (i < tokens.size() && tokens[i].type != Token::BlockEnd) {
+            ConfigEntry* caseValue = nullptr;
+            if (tokens[i].type != Token::Identifier || tokens[i].value != "else") {
+                caseValue = parser->parseValue(tokens, i, compoundStack);
+                if (!caseValue) {
+                    LYNX_ERR << "Failed to parse case value" << std::endl;
+                    return nullptr;
+                }
+            }
+            i++;
+            if (i >= tokens.size() || tokens[i].type != Token::Assign) {
+                LYNX_ERR << "Invalid switch block: Expected '=' but got " << tokens[i].value << std::endl;
+                return nullptr;
+            }
+            i++;
+            std::vector<Token> caseBlock;
+            caseBlock.push_back(tokens[i]);
+            if (i < tokens.size() && tokens[i].type == Token::BlockStart) {
+                i++;
+                int blockDepth = 1;
+                while (i < tokens.size() && blockDepth > 0) {
+                    if (tokens[i].type == Token::BlockStart) {
+                        blockDepth++;
+                    } else if (tokens[i].type == Token::BlockEnd) {
+                        blockDepth--;
+                    }
+                    caseBlock.push_back(tokens[i]);
+                    i++;
+                }
+                i--;
+            }
+            if (i >= tokens.size()) {
+                LYNX_ERR << "Unexpected end of file" << std::endl;
+                return nullptr;
+            }
+            cases.push_back({caseValue, caseBlock});
+            i++;
+        }
+        if (i >= tokens.size() || tokens[i].type != Token::BlockEnd) {
+            LYNX_ERR << "Invalid switch block: Expected block end" << std::endl;
+            return nullptr;
+        }
+        // Execute cases
+        ConfigEntry* result = nullptr;
+        for (auto& casePair : cases) {
+            ConfigEntry* caseValue = casePair.first;
+            if (caseValue && caseValue->getType() == entry->getType() && caseValue->operator==(*entry)) {
+                int newI = 0;
+                std::vector<Token>& caseBlock = casePair.second;
+                result = parser->parseValue(caseBlock, newI, compoundStack);
+                if (!result) {
+                    LYNX_ERR << "Failed to parse case block" << std::endl;
+                    return nullptr;
+                }
+                return result;
+            }
+        }
+        
+        // Default case
+        for (auto& casePair : cases) {
+            ConfigEntry* caseValue = casePair.first;
+            if (caseValue == nullptr) {
+                std::vector<Token>& caseBlock = casePair.second;
+                int newI = 0;
+                result = parser->parseValue(caseBlock, newI, compoundStack);
+                if (!result) {
+                    LYNX_ERR << "Failed to parse default case block" << std::endl;
+                    return nullptr;
+                }
+                return result;
+            }
+        }
+        if (!result) {
+            LYNX_ERR << "No matching case found" << std::endl;
+            return nullptr;
+        }
+        return result;
+    }),
     std::pair("exists", [](std::vector<Token> &tokens, int &i, ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
         auto byPath = [](std::string value, std::vector<CompoundEntry*>& compoundStack) -> ConfigEntry* {
             ConfigEntry* entry = nullptr;

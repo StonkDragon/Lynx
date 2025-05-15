@@ -16,6 +16,7 @@ foo = {
         "World"
     ]
 }
+
 -- Concatenating multiple strings
 a-string = (
     "Hello, "
@@ -47,6 +48,7 @@ name = (
     print "Enter your name: "
     readLn
 )
+
 (printLn ("Hello, " name))
 ```
 
@@ -59,6 +61,7 @@ b: if eq a 1 (
 ) else (
     3
 )
+
 (for i in [1 2 3] (
     printLn i
 ))
@@ -70,9 +73,22 @@ a-list = [
     "Hello"
     "World"
 ]
+
 (for i in a-list (
     printLn i
 ))
+```
+
+You can also use the `switch` statement to generate values based on the value of a variable:
+```
+x = switch (os-name) (
+    "Windows" = "Windows"
+    "Linux" = "Linux"
+    "Mac OS X" = "macOS"
+    else = "Unknown/Other OS"
+)
+
+(printLn ("OS: " x))
 ```
 
 ### Validating types
@@ -145,3 +161,6 @@ printTwice = func(s: string) (
 - `list-append (list: list[any], value: any)`: Adds a value to the end of the list
 - `list-remove (list: list[any], index: number)`: Removes the value at the given index in the list
 - `exit (code: number)`: Exits the program with the given code
+- `ignore (_: any)`: Ignores the value and returns nothing
+- `os-name ()`: Returns the name of the operating system
+- `os-arch ()`: Returns the architecture of the operating system
