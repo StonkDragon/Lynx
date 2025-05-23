@@ -12,6 +12,6 @@ void ConfigEntry::setKey(const std::string& key) {
 void ConfigEntry::setType(EntryType type) {
     this->type = type;
 }
-void ConfigEntry::print(std::ostream& out, int indent) {
+void ConfigEntry::print(std::ostream& out, int indent) const {
     (void) out; (void) indent;
 }

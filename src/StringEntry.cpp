@@ -4,7 +4,7 @@ StringEntry::StringEntry() {
     this->setType(EntryType::String);
 }
 
-std::string StringEntry::getValue() {
+std::string StringEntry::getValue() const {
     return this->value;
 }
 
@@ -12,7 +12,7 @@ void StringEntry::setValue(std::string value) {
     this->value = value;
 }
 
-bool StringEntry::isEmpty() {
+bool StringEntry::isEmpty() const {
     return this->value.empty();
 }
 
@@ -28,7 +28,7 @@ bool StringEntry::operator!=(const ConfigEntry& other) {
     return !operator==(other);
 }
 
-void StringEntry::print(std::ostream& stream, int indent) {
+void StringEntry::print(std::ostream& stream, int indent) const {
     stream << std::string(indent, ' ');
     if (this->getKey().size()) {
         stream << this->getKey() << ": ";

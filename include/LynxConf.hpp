@@ -78,7 +78,7 @@ public:
      * @param out The output stream to print to.
      * @param indent The indentation level.
      */
-    virtual void print(std::ostream& out, int indent = 0);
+    virtual void print(std::ostream& out, int indent = 0) const;
 };
 
 struct StringEntry : public ConfigEntry {
@@ -94,7 +94,7 @@ public:
      * Returns the value of this entry.
      * @return The value of this entry.
      */
-    std::string getValue();
+    std::string getValue() const;
     /**
      * Sets the value of this entry.
      * @param value The value to set.
@@ -104,7 +104,7 @@ public:
      * Checks if this entry is empty.
      * @return True if this entry is empty, false otherwise.
      */
-    bool isEmpty();
+    bool isEmpty() const;
     /**
      * Creates a copy of this entry.
      * @return A copy of this entry.
@@ -127,7 +127,7 @@ public:
      * @param stream The output stream to print to.
      * @param indent The indentation level.
      */
-    void print(std::ostream& stream, int indent = 0) override;
+    void print(std::ostream& stream, int indent = 0) const override;
 };
 
 struct NumberEntry : public ConfigEntry {
@@ -143,7 +143,7 @@ public:
      * Returns the value of this entry.
      * @return The value of this entry.
      */
-    double getValue();
+    double getValue() const;
     /**
      * Sets the value of this entry.
      * @param value The value to set.
@@ -171,16 +171,14 @@ public:
      * @param stream The output stream to print to.
      * @param indent The indentation level.
      */
-    void print(std::ostream& stream, int indent = 0) override;
+    void print(std::ostream& stream, int indent = 0) const override;
 };
 
 struct CompoundEntry;
 
 struct ListEntry : public ConfigEntry {
 private:
-    ConfigEntry** values;
-    unsigned long length;
-    unsigned long capacity;
+    std::vector<ConfigEntry*> values;
     EntryType listType = EntryType::Invalid;
 
 public:
@@ -193,7 +191,7 @@ public:
      * @param index The index of the value to get.
      * @return The value at the specified index.
      */
-    ConfigEntry*& get(unsigned long index);
+    ConfigEntry* get(unsigned long index) const;
     /**
      * Returns the value at the specified index.
      * @param index The index of the value to get.
@@ -205,23 +203,23 @@ public:
      * @param index The index of the value to get.
      * @return The string value at the specified index.
      */
-    StringEntry* getString(unsigned long index);
+    StringEntry* getString(unsigned long index) const;
     /**
      * Returns the number value at the specified index.
      * @param index The index of the value to get.
      * @return The number value at the specified index.
      */
-    ListEntry* getList(unsigned long index);
+    ListEntry* getList(unsigned long index) const;
     /**
      * Returns the compound value at the specified index.
      * @param index The index of the value to get.
      * @return The compound value at the specified index.
      */
-    CompoundEntry* getCompound(unsigned long index);
+    CompoundEntry* getCompound(unsigned long index) const;
     /**
      * Returns the size of the list.
      */
-    unsigned long size();
+    unsigned long size() const;
     /**
      * Adds a value to the list.
      * @param value The value to add.
@@ -244,12 +242,12 @@ public:
     /**
      * Returns the type of the list.
      */
-    EntryType getListType();
+    EntryType getListType() const;
     /**
      * Checks if the list is empty.
      * @return True if the list is empty, false otherwise.
      */
-    bool isEmpty();
+    bool isEmpty() const;
     /**
      * Merges the entries of another list entry into this list entry.
      * @param other The list entry to merge.
@@ -277,14 +275,12 @@ public:
      * @param stream The output stream to print to.
      * @param indent The indentation level.
      */
-    void print(std::ostream& stream, int indent = 0) override;
+    void print(std::ostream& stream, int indent = 0) const override;
 };
 
 struct CompoundEntry : public ConfigEntry {
 private:
-    ConfigEntry** entries;
-    unsigned long length;
-    unsigned long capacity;
+    std::unordered_map<std::string, ConfigEntry*> entriesMap;
 
 public:
     /**
@@ -296,19 +292,19 @@ public:
      * @param key The key of the entry to get.
      * @return The entry with the specified key.
      */
-    bool hasMember(const std::string& key);
+    bool hasMember(const std::string& key) const;
     /**
      * Returns the entry with the specified key.
      * @param key The key of the entry to get.
      * @return The entry with the specified key.
      */
-    ConfigEntry*& get(const std::string& key);
+    ConfigEntry* get(const std::string& key) const;
     /**
      * Returns the entry with the specified dot-separated path.
      * @param path The path of the entry to get.
      * @return The entry with the specified path.
      */
-    ConfigEntry* getByPath(const std::string& path);
+    ConfigEntry* getByPath(const std::string& path) const;
     /**
      * Returns the entry with the specified key.
      * @param key The key of the entry to get.
@@ -320,7 +316,7 @@ public:
      * @param key The key of the entry to get.
      * @return The string entry with the specified key.
      */
-    StringEntry* getString(const std::string& key);
+    StringEntry* getString(const std::string& key) const;
     /**
      * Returns the string entry with the specified key or the default value if the entry does not exist.
      * @param key The key of the entry to get.
@@ -333,19 +329,19 @@ public:
      * @param key The key of the entry to get.
      * @return The list entry with the specified key.
      */
-    ListEntry* getList(const std::string& key);
+    ListEntry* getList(const std::string& key) const;
     /**
      * Returns the compound entry with the specified key.
      * @param key The key of the entry to get.
      * @return The compound entry with the specified key.
      */
-    CompoundEntry* getCompound(const std::string& key);
+    CompoundEntry* getCompound(const std::string& key) const;
     /**
      * Returns the number entry with the specified key.
      * @param key The key of the entry to get.
      * @return The number entry with the specified key.
      */
-    NumberEntry* getNumber(const std::string& key);
+    NumberEntry* getNumber(const std::string& key) const;
     /**
      * Adds an entry to the compound entry.
      * If an entry with the same key already exists, it will be replaced.
@@ -401,7 +397,7 @@ public:
      * Checks if the compound entry is empty.
      * @return True if the compound entry is empty, false otherwise.
      */
-    bool isEmpty();
+    bool isEmpty() const;
     /**
      * Merges the entries of another compound entry into this compound entry.
      * @param other The compound entry to merge.
@@ -430,7 +426,7 @@ public:
      * @param stream The output stream to print to.
      * @param indent The indentation level.
      */
-    void print(std::ostream& stream, int indent = 0) override;
+    void print(std::ostream& stream, int indent = 0) const override;
 };
 
 struct Token {
@@ -498,7 +494,7 @@ struct FunctionEntry : public ConfigEntry {
     CompoundEntry* parseArgs(ConfigParser* parser, std::vector<Token>& tokens, int& i, std::vector<CompoundEntry*>& compoundStack);
     bool operator==(const ConfigEntry& other) override;
     bool operator!=(const ConfigEntry& other) override;
-    void print(std::ostream& stream, int indent = 0) override;
+    void print(std::ostream& stream, int indent = 0) const override;
     ConfigEntry* clone() override;
     virtual ConfigEntry* call(ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, std::vector<Token>& tokens, int& i);
 };
@@ -518,7 +514,7 @@ struct TypeEntry : public ConfigEntry {
     bool validate(ConfigEntry* what, const std::vector<std::string>& flags, std::ostream& out = std::cout);
     bool operator==(const ConfigEntry& other) override;
     bool operator!=(const ConfigEntry& other) override;
-    void print(std::ostream& stream, int indent = 0) override;
+    void print(std::ostream& stream, int indent = 0) const override;
     ConfigEntry* clone() override;
 };
 

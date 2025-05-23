@@ -4,7 +4,7 @@ NumberEntry::NumberEntry() {
     this->setType(EntryType::Number);
 }
 
-double NumberEntry::getValue() {
+double NumberEntry::getValue() const {
     return this->value;
 }
 
@@ -24,7 +24,7 @@ bool NumberEntry::operator!=(const ConfigEntry& other) {
     return !operator==(other);
 }
 
-void NumberEntry::print(std::ostream& stream, int indent) {
+void NumberEntry::print(std::ostream& stream, int indent) const {
     stream << std::string(indent, ' ');
     if (this->getKey().size()) {
         stream << this->getKey() << ": ";

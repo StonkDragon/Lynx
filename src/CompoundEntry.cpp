@@ -2,21 +2,14 @@
 
 CompoundEntry::CompoundEntry() {
     this->setType(EntryType::Compound);
-    this->entries = nullptr;
-    this->length = 0;
-    this->capacity = 0;
+    this->entriesMap = {};
 }
 
-bool CompoundEntry::hasMember(const std::string& key) {
-    for (unsigned long i = 0; i < this->length; i++) {
-        if (this->entries[i]->getKey() == key) {
-            return true;
-        }
-    }
-    return false;
+bool CompoundEntry::hasMember(const std::string& key) const {
+    return this->entriesMap.find(key) != this->entriesMap.end();
 }
 
-StringEntry* CompoundEntry::getString(const std::string& key) {
+StringEntry* CompoundEntry::getString(const std::string& key) const {
     auto x = get(key);
     if (x && x->getType() == EntryType::String) {
         return ((StringEntry*) x);
@@ -34,7 +27,7 @@ StringEntry* CompoundEntry::getStringOrDefault(const std::string& key, const std
     return entry;
 }
 
-NumberEntry* CompoundEntry::getNumber(const std::string& key) {
+NumberEntry* CompoundEntry::getNumber(const std::string& key) const {
     auto x = get(key);
     if (x && x->getType() == EntryType::Number) {
         return ((NumberEntry*) x);
@@ -42,7 +35,7 @@ NumberEntry* CompoundEntry::getNumber(const std::string& key) {
     return nullptr;
 }
 
-ListEntry* CompoundEntry::getList(const std::string& key) {
+ListEntry* CompoundEntry::getList(const std::string& key) const {
     auto x = get(key);
     if (x && x->getType() == EntryType::List) {
         return ((ListEntry*) x);
@@ -50,7 +43,7 @@ ListEntry* CompoundEntry::getList(const std::string& key) {
     return nullptr;
 }
 
-CompoundEntry* CompoundEntry::getCompound(const std::string& key) {
+CompoundEntry* CompoundEntry::getCompound(const std::string& key) const {
     auto x = get(key);
     if (x && x->getType() == EntryType::Compound) {
         return ((CompoundEntry*) x);
@@ -58,18 +51,17 @@ CompoundEntry* CompoundEntry::getCompound(const std::string& key) {
     return nullptr;
 }
 
-ConfigEntry*& CompoundEntry::get(const std::string& key) {
-    for (unsigned long i = 0; i < this->length; i++) {
-        if (this->entries[i]->getKey() == key) {
-            return this->entries[i];
-        }
+ConfigEntry* CompoundEntry::get(const std::string& key) const {
+    auto it = this->entriesMap.find(key);
+    if (it != this->entriesMap.end()) {
+        return it->second;
     }
     return ConfigEntry::Null;
 }
 
-ConfigEntry* CompoundEntry::getByPath(const std::string& path) {
+ConfigEntry* CompoundEntry::getByPath(const std::string& path) const {
     std::string key = "";
-    CompoundEntry* current = this;
+    const CompoundEntry* current = this;
     for (char c : path) {
         if (c == '.') {
             if (key.size()) {
@@ -87,7 +79,7 @@ ConfigEntry* CompoundEntry::getByPath(const std::string& path) {
 }
 
 ConfigEntry*& CompoundEntry::operator[](const std::string& key) {
-    return this->get(key);
+    return this->entriesMap[key];
 }
 
 void CompoundEntry::setString(const std::string& key, const std::string& value) {
@@ -103,28 +95,7 @@ void CompoundEntry::setString(const std::string& key, const std::string& value) 
 }
 
 void CompoundEntry::add(ConfigEntry* entry) {
-    for (unsigned long i = 0; i < this->length; i++) {
-        if (this->entries[i]->getKey() == entry->getKey()) {
-            this->entries[i] = entry;
-            return;
-        }
-    }
-    if (this->length >= this->capacity) {
-        this->capacity = this->capacity ? this->capacity * 2 : 16;
-        try { 
-            ConfigEntry** newEntries = new ConfigEntry*[this->capacity];
-            for (unsigned long i = 0; i < this->length; i++) {
-                newEntries[i] = this->entries[i];
-            }
-            delete[] this->entries;
-            this->entries = newEntries;
-        } catch (std::bad_array_new_length& e) {
-            LYNX_RT_ERR << "Failed to reserve " << this->capacity << " elements" << std::endl;
-            LYNX_RT_ERR << e.what() << std::endl;
-            std::exit(1);
-        }
-    }
-    this->entries[this->length++] = entry;
+    this->entriesMap[entry->getKey()] = entry;
 }
 
 void CompoundEntry::addString(const std::string& key, const std::string& value) {
@@ -180,30 +151,28 @@ void CompoundEntry::addCompound(CompoundEntry* value) {
 
 size_t CompoundEntry::merge(CompoundEntry* other) {
     size_t count = 0;
-    for (unsigned long i = 0; i < other->length; i++) {
-        if (!this->hasMember(other->entries[i]->getKey())) {
-            this->add(other->entries[i]);
-            count++;
-        }
+    for (auto& entry : other->entriesMap) {
+        this->add(entry.second);
+        count++;
     }
     return count;
 }
 
 void CompoundEntry::remove(const std::string& key) {
-    for (u_long i = 0; i < this->length; i++) {
-        if (this->entries[i]->getKey() == key) {
-            this->entries[i] = nullptr;
-            return;
-        }
+    auto it = this->entriesMap.find(key);
+    if (it != this->entriesMap.end()) {
+        this->entriesMap.erase(it);
+    } else {
+        std::cerr << "Entry with key '" << key << "' not found!" << std::endl;
     }
 }
 
 void CompoundEntry::removeAll() {
-    this->length = 0;
+    this->entriesMap.clear();
 }
 
-bool CompoundEntry::isEmpty() {
-    return this->length == 0;
+bool CompoundEntry::isEmpty() const {
+    return this->entriesMap.empty();
 }
 
 bool CompoundEntry::operator==(const ConfigEntry& other) {
@@ -211,11 +180,24 @@ bool CompoundEntry::operator==(const ConfigEntry& other) {
         return false;
     }
     const CompoundEntry& otherCompound = (const CompoundEntry&) other;
-    if (this->length != otherCompound.length) {
+    if (this->entriesMap.size() != otherCompound.entriesMap.size()) {
         return false;
     }
-    for (u_long i = 0; i < this->length; i++) {
-        if (this->entries[i]->operator!=(*otherCompound.entries[i])) {
+    for (const auto& entry : this->entriesMap) {
+        auto it = otherCompound.entriesMap.find(entry.first);
+        if (it == otherCompound.entriesMap.end()) {
+            return false;
+        }
+        if (!entry.second->operator==(*(it->second))) {
+            return false;
+        }
+    }
+    for (const auto& entry : otherCompound.entriesMap) {
+        auto it = this->entriesMap.find(entry.first);
+        if (it == this->entriesMap.end()) {
+            return false;
+        }
+        if (!entry.second->operator==(*(it->second))) {
             return false;
         }
     }
@@ -226,10 +208,10 @@ bool CompoundEntry::operator!=(const ConfigEntry& other) {
     return !operator==(other);
 }
 
-void CompoundEntry::print(std::ostream& stream, int indent) {
+void CompoundEntry::print(std::ostream& stream, int indent) const {
     if (this->getKey() == ".root") {
-        for (u_long i = 0; i < this->length; i++) {
-            this->entries[i]->print(stream, indent);
+        for (auto& entry : this->entriesMap) {
+            entry.second->print(stream, indent);
         }
     } else {
         stream << std::string(indent, ' ');
@@ -238,8 +220,8 @@ void CompoundEntry::print(std::ostream& stream, int indent) {
         } 
         stream << "{" << std::endl;
         indent += 2;
-        for (u_long i = 0; i < this->length; i++) {
-            this->entries[i]->print(stream, indent);
+        for (auto& entry : this->entriesMap) {
+            entry.second->print(stream, indent);
         }
         indent -= 2;
         stream << std::string(indent, ' ') << "}" << std::endl;

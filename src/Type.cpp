@@ -225,7 +225,7 @@ bool TypeEntry::operator!=(const ConfigEntry& other) {
     return !operator==(other);
 }
 
-void TypeEntry::print(std::ostream& stream, int indent) {
+void TypeEntry::print(std::ostream& stream, int indent) const {
     stream << std::string(indent, ' ');
     if (this->getKey().size()) {
         stream << this->getKey() << ": ";

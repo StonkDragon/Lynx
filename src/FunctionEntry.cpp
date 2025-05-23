@@ -22,7 +22,7 @@ bool FunctionEntry::operator!=(const ConfigEntry& other) {
     return !operator==(other);
 }
 
-void FunctionEntry::print(std::ostream& stream, int indent) {
+void FunctionEntry::print(std::ostream& stream, int indent) const {
     stream << std::string(indent, ' ');
     if (this->getKey().size()) {
         stream << this->getKey() << ": ";

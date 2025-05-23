@@ -314,7 +314,7 @@ std::unordered_map<std::string, NativeFunctionEntry*> nativeFunctions {
             std::cerr << "Index out of bounds" << std::endl;
             return nullptr;
         }
-        return list->get(idx) = value->clone();
+        return list->operator[](idx) = value->clone();
     })),
     std::pair("list-append", new NativeFunctionEntry({{"list", Type::List(Type::Any())}, {"value", Type::Any()}}, [](ConfigParser* parser, std::vector<CompoundEntry*>& compoundStack, CompoundEntry* args) -> ConfigEntry* {
         ListEntry* list = args->getList("list");
